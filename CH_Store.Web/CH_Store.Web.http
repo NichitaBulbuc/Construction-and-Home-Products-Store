@@ -1,0 +1,6 @@
+@CH_Store.Web_HostAddress = http://localhost:5116
+
+GET {{CH_Store.Web_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

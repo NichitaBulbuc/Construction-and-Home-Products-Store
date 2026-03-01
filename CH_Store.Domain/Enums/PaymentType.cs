@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace CH_Store.Application.Payments.Models
+namespace CH_Store.Domain.Enums
 {
      public enum PaymentType
      {

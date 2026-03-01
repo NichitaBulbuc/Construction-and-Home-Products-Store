@@ -1,6 +1,7 @@
 ﻿using Application.DBContext;
 using CH_Store.Application.Payments.Interfaces;
-using CH_Store.Application.Payments.Models;
+using CH_Store.Domain.Enums;
+using CH_Store.Domain.Models;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;

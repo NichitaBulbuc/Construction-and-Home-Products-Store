@@ -1,4 +1,4 @@
-﻿using CH_Store.Application.Payments.Models;
+﻿using CH_Store.Domain.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace Application.DBContext

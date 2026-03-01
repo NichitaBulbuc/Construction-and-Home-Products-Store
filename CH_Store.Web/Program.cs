@@ -1,6 +1,10 @@
 ﻿using Application.DBContext;
-using CH_Store.Application.Payments.Factories;
+using CH_Store.Application.DBContext;
+using CH_Store.Application.Notifications.Interfaces;
+using CH_Store.Application.Notifications.Services;
+using CH_Store.Application.Payments.Services;
 using Microsoft.EntityFrameworkCore;
+using System;
 using System.Text.Json.Serialization;
 
 
@@ -13,6 +17,25 @@ builder.Services.AddDbContext<PaymentContext>
 
 // Înregistrăm Factory-ul ca Singleton (sau Scoped)
 builder.Services.AddSingleton<PaymentProvider>();
+
+//Configurare In-Memory Database
+builder.Services.AddDbContext<NotificationContext>(options =>
+    options.UseInMemoryDatabase("MagazinConstructiiDB"));
+
+// Înregistrare Fabrici (Abstract Factory)
+builder.Services.AddTransient<EmailNotificationFactory>();
+builder.Services.AddTransient<SmsNotificationFactory>();
+
+// Resolver pentru a alege fabrica la runtime
+builder.Services.AddTransient<Func<string, INotificationFactory>>(serviceProvider => key =>
+{
+     return key.ToLower() switch
+     {
+          "sms" => serviceProvider.GetRequiredService<SmsNotificationFactory>(),
+          "email" => serviceProvider.GetRequiredService<EmailNotificationFactory>(),
+          _ => serviceProvider.GetRequiredService<EmailNotificationFactory>()
+     };
+});
 
 builder.Services.AddSwaggerGen();
 

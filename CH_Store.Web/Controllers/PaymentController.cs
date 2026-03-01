@@ -1,6 +1,6 @@
 ﻿using Application.DBContext;
-using CH_Store.Application.Payments.Factories;
-using CH_Store.Application.Payments.Models;
+using CH_Store.Application.Payments.Services;
+using CH_Store.Domain.DTOs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;

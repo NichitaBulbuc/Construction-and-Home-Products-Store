@@ -16,19 +16,14 @@ namespace CH_Store.Application.Payments.Services
           public abstract IPaymentProcessor Create();
           protected readonly PaymentContext? _context;
 
-          public void Pay(double amount)
-          {
-               var processor = Create();
-               processor.Process(amount);
-               Console.WriteLine("Tranzacție finalizată cu succes în sistemul magazinului.");
-          }
 
           public void Pay(double amount, PaymentType type)
           {
-               var processor = Create();
+               // Logica comună de procesare
+               IPaymentProcessor processor = Create();
                processor.Process(amount);
 
-               // SALVARE ÎN BAZA DE DATE
+               // Salvare în baza de date
                var transaction = new PaymentData
                {
                     Amount = amount,
@@ -36,8 +31,10 @@ namespace CH_Store.Application.Payments.Services
                     Status = "Success"
                };
 
-               _context.Transactions.Add(transaction);
-               _context.SaveChanges();
+               _context?.Transactions.Add(transaction);
+               _context?.SaveChanges();
+
+               Console.WriteLine($"Tranzacție {type} finalizată cu succes.");
           }
      }
 }

@@ -28,7 +28,7 @@ namespace CH_Store.Web.Controllers
                     var service = _paymentProvider.GetService(request.Type);
 
                     // 2. Executăm plata
-                    service.Pay(request.Amount);
+                    service.Pay(request.Amount, request.Type);
 
                     return Ok(new { Message = $"Plata de {request.Amount} prin {request.Type} a fost inițiată." });
                }

@@ -8,9 +8,13 @@ namespace CH_Store.Domain.Models
 {
      public class OrderData
      {
-          public int Id { get; set; }
+          public Guid Id { get; set; } = Guid.NewGuid();
           public string ClientName { get; set; } = "";
-          public string ProductList { get; set; } = "";
+          public List<OrderItemData> Items { get; set; } = new List<OrderItemData>();
+          public string DeliveryAddress { get; set; } = "";
+          public bool HasInstallation { get; set; }
+          public bool IsPriority { get; set; }
+          public double TotalPrice { get; set; }
           public string Status { get; set; } = "";
 
      }

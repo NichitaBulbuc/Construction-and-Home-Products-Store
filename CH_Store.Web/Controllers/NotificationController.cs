@@ -42,7 +42,8 @@ namespace CH_Store.Web.Controllers
 
                // 4. Generăm conținutul
                // Putem folosi și datele din DB (order) și datele din Request (email/phone)
-               string content = template.GetFormatedContent(order.ProductList);
+               string itemsSummary = string.Join(", ", order.Items.Select(i => i.ProductName));
+               string content = template.GetFormatedContent(itemsSummary);
 
                sender.Send(content);
 

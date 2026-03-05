@@ -16,11 +16,13 @@ builder.Services.AddDbContext<PaymentContext>
      (opt => opt.UseInMemoryDatabase("CH_StoreDb"));
 
 // Înregistrăm Factory-ul ca Singleton (sau Scoped)
-builder.Services.AddSingleton<PaymentProvider>();
+builder.Services.AddScoped<PaymentProvider>();
 
 //Configurare In-Memory Database
 builder.Services.AddDbContext<NotificationContext>(options =>
-    options.UseInMemoryDatabase("MagazinConstructiiDB"));
+    options.UseInMemoryDatabase("CH_StoreDb"));
+builder.Services.AddDbContext<OrderContext>(options =>
+    options.UseInMemoryDatabase("CH_StoreDb"));
 
 // Înregistrare Fabrici (Abstract Factory)
 builder.Services.AddTransient<EmailNotificationFactory>();

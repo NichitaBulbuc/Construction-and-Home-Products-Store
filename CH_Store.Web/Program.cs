@@ -3,6 +3,8 @@ using CH_Store.Application.DBContext;
 using CH_Store.Application.Notifications.Interfaces;
 using CH_Store.Application.Notifications.Services;
 using CH_Store.Application.Payments.Services;
+using CH_Store.Application.Product.Services;
+using CH_Store.Domain.Models;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Text.Json.Serialization;
@@ -23,6 +25,8 @@ builder.Services.AddDbContext<NotificationContext>(options =>
     options.UseInMemoryDatabase("CH_StoreDb"));
 builder.Services.AddDbContext<OrderContext>(options =>
     options.UseInMemoryDatabase("CH_StoreDb"));
+builder.Services.AddDbContext<ProductContext>(options =>
+    options.UseInMemoryDatabase("CH_StoreDb"));
 
 // Înregistrare Fabrici (Abstract Factory)
 builder.Services.AddTransient<EmailNotificationFactory>();
@@ -39,9 +43,30 @@ builder.Services.AddTransient<Func<string, INotificationFactory>>(serviceProvide
      };
 });
 
+
+// 2. Configurare Prototype Registry ca Singleton
+var registry = new ProductRegistry();
+
+// Populăm registrul cu date "default" (șabloane)
+registry.AddItem("construction", new ConstructionProduct(new ProductPrototypeData
+{
+     Name = "Ciment Standard",
+     Price = 45.0,
+     Weight = 20.0
+}));
+
+registry.AddItem("home", new HomeProduct(new ProductPrototypeData
+{
+     Name = "Televizor Smart",
+     Price = 2500.0,
+     EnergyClass = "A++"
+}));
+builder.Services.AddSingleton(registry);
+
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {

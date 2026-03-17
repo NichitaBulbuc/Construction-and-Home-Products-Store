@@ -30,6 +30,9 @@ namespace CH_Store.Application.Payments.Services
 
                _creators[PaymentType.CashOnDelivery] = () =>
                    ActivatorUtilities.CreateInstance<CashOnDeliveryService>(_serviceProvider);
+               _creators[PaymentType.Stripe] = () =>
+                   ActivatorUtilities.CreateInstance<StripePaymentService>(_serviceProvider);
+
           }
 
           public PaymentService GetService(PaymentType type)

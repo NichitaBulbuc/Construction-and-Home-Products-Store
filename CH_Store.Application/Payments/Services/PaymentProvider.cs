@@ -1,4 +1,5 @@
-﻿using CH_Store.Domain.Enums;
+﻿using CH_Store.Application.Payments.Interfaces;
+using CH_Store.Domain.Enums;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;

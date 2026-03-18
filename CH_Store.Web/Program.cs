@@ -2,6 +2,8 @@
 using CH_Store.Application.DBContext;
 using CH_Store.Application.Notifications.Interfaces;
 using CH_Store.Application.Notifications.Services;
+using CH_Store.Application.Order.Interfaces;
+using CH_Store.Application.Order.Services;
 using CH_Store.Application.Payments.Services;
 using CH_Store.Application.Product.Services;
 using CH_Store.Domain.Models;
@@ -25,6 +27,7 @@ builder.Services.AddDbContext<NotificationContext>(options =>
     options.UseInMemoryDatabase("CH_StoreDb"));
 builder.Services.AddDbContext<OrderContext>(options =>
     options.UseInMemoryDatabase("CH_StoreDb"));
+builder.Services.AddScoped<IOrderFacade, OrderFacade>();
 builder.Services.AddDbContext<ProductContext>(options =>
     options.UseInMemoryDatabase("CH_StoreDb"));
 

@@ -1,4 +1,5 @@
-﻿using CH_Store.Application.Order.Services;
+﻿using CH_Store.Application.Order.Interfaces;
+using CH_Store.Application.Order.Services;
 using CH_Store.Domain.DTOs;
 using CH_Store.Domain.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -10,29 +11,26 @@ namespace CH_Store.Web.Controllers
      [Route("api/[controller]")]
      public class OrderController: ControllerBase
      {
+          private readonly IOrderFacade _orderFacade;
+
+          public OrderController(IOrderFacade orderFacade)
+          {
+               _orderFacade = orderFacade; 
+          }
+
           [HttpPost("standard")]
           public IActionResult CreateStandardOrder([FromBody] OrderRequest dto)
           {
                if (dto == null) return BadRequest("Datele comenzii sunt invalide.");
-               
-               // Inițializăm Builder-ul și Directorul
-               var orderBuilder = new OrderBuilder();
-               var director = new OrderDirector(orderBuilder);
 
-               // Directorul execută rețeta "Standard" folosind datele din DTO
-               director.ConstructStandardOrder(dto);
+               var result = _orderFacade.PlaceOrder(dto, isFullOrder: false);
 
-               // Extragem produsul final
-               OrderData finalOrder = orderBuilder.GetResult();
-
-               var reportBuilder = new OrderReportBuilder();
-               director = new OrderDirector(reportBuilder);
-
-               director.ConstructStandardOrder(dto);
-               string reportText = reportBuilder.GetResult();
-
-               // În mod normal aici ai salva în DB: _repository.Save(order);
-               return Ok(new { Message = "Comanda standard a fost creată", Order = finalOrder, Report = reportText });
+               return Ok(new
+               {
+                    Message = "Comanda standard a fost creată",
+                    Order = result.Order,
+                    Report = result.Report
+               });
           }
 
           [HttpPost("full")]
@@ -40,25 +38,13 @@ namespace CH_Store.Web.Controllers
           {
                if (dto == null) return BadRequest("Datele comenzii sunt invalide.");
 
-               // Pasul 1: Construim obiectul Order real
-               var orderBuilder = new OrderBuilder();
-               var director = new OrderDirector(orderBuilder);
-
-               director.ConstructFullOrder(dto);
-               OrderData finalOrder = orderBuilder.GetResult();
-
-               // Pasul 2: Generăm și un raport/sumar (folosind același Director dar alt Builder)
-               var reportBuilder = new OrderReportBuilder();
-               director = new OrderDirector(reportBuilder);
-
-               director.ConstructFullOrder(dto);
-               string reportText = reportBuilder.GetResult();
+               var result = _orderFacade.PlaceOrder(dto, isFullOrder: true);
 
                return Ok(new
                {
                     Message = "Comanda completă a fost procesată",
-                    Order = finalOrder,
-                    Summary = reportText
+                    Order = result.Order,
+                    Summary = result.Report
                });
           }
 

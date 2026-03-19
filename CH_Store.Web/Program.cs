@@ -78,6 +78,15 @@ builder.Services.AddControllers()
     });
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 
+// În Program.cs, la adăugarea controllerelor:
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+         // Această opțiune ajută dacă ai kituri care se referă unul pe altul
+         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+         options.JsonSerializerOptions.WriteIndented = true; // Pentru un JSON frumos în browser
+    });
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

@@ -16,8 +16,4 @@
     <ProjectReference Include="..\CH_Store.Domain\CH_Store.Domain.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Product\Interfaces\" />
-  </ItemGroup>
-
 </Project>

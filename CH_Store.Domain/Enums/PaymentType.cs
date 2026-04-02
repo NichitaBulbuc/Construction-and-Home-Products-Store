@@ -11,6 +11,7 @@ namespace CH_Store.Domain.Enums
           Card,
           EWallet,
           BankTransfer,
-          CashOnDelivery
+          CashOnDelivery,
+          Stripe
      }
 }

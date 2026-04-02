@@ -5,6 +5,8 @@ using CH_Store.Application.Notifications.Services;
 using CH_Store.Application.Order.Interfaces;
 using CH_Store.Application.Order.Services;
 using CH_Store.Application.Payments.Services;
+using CH_Store.Application.Product.Interfaces;
+using CH_Store.Application.Product.Proxy;
 using CH_Store.Application.Product.Services;
 using CH_Store.Domain.Models;
 using Microsoft.EntityFrameworkCore;
@@ -46,6 +48,12 @@ builder.Services.AddTransient<Func<string, INotificationFactory>>(serviceProvide
      };
 });
 
+builder.Services.AddScoped<ProductService>();
+builder.Services.AddScoped<IProductRepo>(provider =>
+{
+     var realService = provider.GetRequiredService<ProductService>();
+     return new ProductRemoteProxy(realService);
+});
 
 // 2. Configurare Prototype Registry ca Singleton
 var registry = new ProductRegistry();
@@ -88,6 +96,44 @@ builder.Services.AddControllers()
     });
 
 var app = builder.Build();
+
+// --- SECȚIUNEA DE SEED DATA (Produse pentru Demo) ---
+using (var scope = app.Services.CreateScope())
+{
+     var context = scope.ServiceProvider.GetRequiredService<ProductContext>();
+
+     // Adăugăm câteva produse de test dacă baza e goală
+     if (!context.Products.Any())
+     {
+          context.Products.AddRange(
+              new ProductPrototypeData
+              {
+                   Id = 1,
+                   Name = "Ciment Holcim 40kg",
+                   Price = 95.0,
+                   Weight = 40,
+                   Description = "Ideal pentru fundații"
+              },
+              new ProductPrototypeData
+              {
+                   Id = 2,
+                   Name = "Bormașină Bosch Professional",
+                   Price = 1200.0,
+                   EnergyClass = "A+",
+                   Description = "Acumulator inclus"
+              },
+              new ProductPrototypeData
+              {
+                   Id = 3,
+                   Name = "Vopsea Lavabilă Albă 15L",
+                   Price = 450.0,
+                   Weight = 20,
+                   Description = "Acoperire mare"
+              }
+          );
+          context.SaveChanges();
+     }
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

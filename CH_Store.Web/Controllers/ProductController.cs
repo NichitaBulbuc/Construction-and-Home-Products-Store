@@ -1,8 +1,10 @@
 ﻿using CH_Store.Application.DBContext;
 using CH_Store.Application.Product.Catalog;
+using CH_Store.Application.Product.Interfaces;
 using CH_Store.Application.Product.Services;
 using CH_Store.Domain.DTOs;
 using CH_Store.Domain.Models;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -15,11 +17,13 @@ namespace CH_Store.Web.Controllers
      {
           private readonly ProductRegistry _registry;
           private readonly ProductContext _context;
+          private readonly IProductRepo _repository;
 
-          public ProductController(ProductRegistry registry, ProductContext context)
+          public ProductController(ProductRegistry registry, ProductContext context, IProductRepo repository)
           {
                _registry = registry;
                _context = context;
+               _repository = repository;
           }
 
           [HttpPost("create-from-prototype")]
@@ -54,12 +58,7 @@ namespace CH_Store.Web.Controllers
                return Ok(response);
           }
 
-          [HttpGet("all-from-db")]
-          public async Task<IActionResult> GetAll()
-          {
-               var products = await _context.Products.ToListAsync();
-               return Ok(products);
-          }
+         
           [HttpGet("kit/{id}")]
           public IActionResult GetKitDetails(int id)
           {
@@ -91,5 +90,26 @@ namespace CH_Store.Web.Controllers
                });
           }
 
-     }
+          [HttpGet]
+          public async Task<ActionResult<IEnumerable<ProductPrototypeData>>> GetAll()
+          {
+               var products = await _repository.GetAllAsync();
+               return Ok(products);
+          }
+
+          [HttpGet("{id}")]
+          public async Task<ActionResult<ProductPrototypeData>> GetById(int id)
+          {
+               var product = await _repository.GetByIdAsync(id);
+
+               if (product == null)
+               {
+                    return NotFound(new { Message = $"Produsul cu ID {id} nu a fost găsit." });
+               }
+
+               return Ok(product);
+          }
+     
+
+}
 }

@@ -1,4 +1,6 @@
 using Application.DBContext;
+using CH_Store.Application.Admin.Interfaces;
+using CH_Store.Application.Admin.Services;
 using CH_Store.Application.DBContext;
 using CH_Store.Application.DbRepo;
 using CH_Store.Application.Notifications;
@@ -131,6 +133,13 @@ builder.Services.AddScoped<IProductRepo>(provider =>
      var cache       = provider.GetRequiredService<IMemoryCache>();
      return new ProductRemoteProxy(realService, cache);
 });
+
+// ─── Admin Services ───────────────────────────────────────────────────────────
+// Toate Scoped — depind de AppDbContext (Scoped)
+builder.Services.AddScoped<IAdminProductService,   AdminProductService>();
+builder.Services.AddScoped<IAdminOrderService,     AdminOrderService>();
+builder.Services.AddScoped<IAdminUserService,      AdminUserService>();
+builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
 
 // ─── Catalog (Composite Pattern) ─────────────────────────────────────────────
 builder.Services.AddScoped<ICatalogService, CatalogService>();

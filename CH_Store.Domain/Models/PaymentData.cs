@@ -13,6 +13,7 @@ namespace CH_Store.Domain.Models
           public double Amount { get; set; }
           public PaymentType Method { get; set; } // Enum-ul tău (Card, EWallet, etc.)
           public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-          public string Status { get; set; } = "Pending"; // Pending, Success, Failed
+          public string Status        { get; set; } = "Pending"; // Pending, Success, Failed
+          public string TransactionId { get; set; } = "";
      }
 }

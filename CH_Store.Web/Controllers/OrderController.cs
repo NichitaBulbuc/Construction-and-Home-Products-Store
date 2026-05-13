@@ -1,53 +1,171 @@
-﻿using CH_Store.Application.Order.Interfaces;
-using CH_Store.Application.Order.Services;
+using CH_Store.Application.Order.Interfaces;
 using CH_Store.Domain.DTOs;
-using CH_Store.Domain.Models;
 using Microsoft.AspNetCore.Mvc;
-using System.IO;
 
 namespace CH_Store.Web.Controllers
 {
      [ApiController]
      [Route("api/[controller]")]
-     public class OrderController: ControllerBase
+     public class OrderController : ControllerBase
      {
-          private readonly IOrderFacade _orderFacade;
+          private readonly IOrderFacade          _orderFacade;
+          private readonly IOrderTemplateService _templateService;
 
-          public OrderController(IOrderFacade orderFacade)
+          public OrderController(IOrderFacade orderFacade, IOrderTemplateService templateService)
           {
-               _orderFacade = orderFacade; 
+               _orderFacade     = orderFacade;
+               _templateService = templateService;
           }
 
+          // ──────────────────────────────────────────────────────────────
+          // POST /api/order/standard
+          // Comanda simpla: produse + livrare standard, fara extras.
+          // ──────────────────────────────────────────────────────────────
           [HttpPost("standard")]
-          public IActionResult CreateStandardOrder([FromBody] OrderRequest dto)
+          public async Task<IActionResult> CreateStandardOrder([FromBody] OrderRequest dto)
           {
-               if (dto == null) return BadRequest("Datele comenzii sunt invalide.");
+               if (dto == null || !dto.Items.Any())
+                    return BadRequest("Comanda trebuie sa contina cel putin un produs.");
 
-               var result = _orderFacade.PlaceOrder(dto, isFullOrder: false);
+               var (order, report, dbId) = await _orderFacade.PlaceStandardOrderAsync(dto);
 
-               return Ok(new
-               {
-                    Message = "Comanda standard a fost creată",
-                    Order = result.Order,
-                    Report = result.Report
-               });
+               return Ok(BuildResponse("Comanda standard salvata cu succes.", order, report, dbId));
           }
 
+          // ──────────────────────────────────────────────────────────────
+          // POST /api/order/full
+          // Comanda completa: toate optiunile din request activate.
+          // ──────────────────────────────────────────────────────────────
           [HttpPost("full")]
-          public IActionResult CreateFullOrder([FromBody] OrderRequest dto)
+          public async Task<IActionResult> CreateFullOrder([FromBody] OrderRequest dto)
           {
-               if (dto == null) return BadRequest("Datele comenzii sunt invalide.");
+               if (dto == null || !dto.Items.Any())
+                    return BadRequest("Comanda trebuie sa contina cel putin un produs.");
 
-               var result = _orderFacade.PlaceOrder(dto, isFullOrder: true);
+               var (order, report, dbId) = await _orderFacade.PlaceFullOrderAsync(dto);
 
-               return Ok(new
-               {
-                    Message = "Comanda completă a fost procesată",
-                    Order = result.Order,
-                    Summary = result.Report
-               });
+               return Ok(BuildResponse("Comanda completa salvata cu succes.", order, report, dbId));
           }
 
+          // ──────────────────────────────────────────────────────────────
+          // POST /api/order/express
+          // Livrare Express + prioritate fortata.
+          // ──────────────────────────────────────────────────────────────
+          [HttpPost("express")]
+          public async Task<IActionResult> CreateExpressOrder([FromBody] OrderRequest dto)
+          {
+               if (dto == null || !dto.Items.Any())
+                    return BadRequest("Comanda trebuie sa contina cel putin un produs.");
 
+               var (order, report, dbId) = await _orderFacade.PlaceExpressOrderAsync(dto);
+
+               return Ok(BuildResponse("Comanda Express salvata cu succes.", order, report, dbId));
+          }
+
+          // ──────────────────────────────────────────────────────────────
+          // POST /api/order/bulk
+          // En-gros: reducere de 10% aplicata automat.
+          // ──────────────────────────────────────────────────────────────
+          [HttpPost("bulk")]
+          public async Task<IActionResult> CreateBulkOrder([FromBody] OrderRequest dto)
+          {
+               if (dto == null || !dto.Items.Any())
+                    return BadRequest("Comanda trebuie sa contina cel putin un produs.");
+
+               var (order, report, dbId) = await _orderFacade.PlaceBulkOrderAsync(dto);
+
+               return Ok(BuildResponse("Comanda en-gros salvata cu succes.", order, report, dbId));
+          }
+
+          // ──────────────────────────────────────────────────────────────
+          // GET /api/order/{id}
+          // ──────────────────────────────────────────────────────────────
+          [HttpGet("{id:int}")]
+          public async Task<IActionResult> GetOrder(int id)
+          {
+               var order = await _orderFacade.GetOrderAsync(id);
+
+               if (order == null)
+                    return NotFound($"Comanda cu ID {id} nu a fost gasita.");
+
+               return Ok(order);
+          }
+
+          // ──────────────────────────────────────────────────────────────
+          // GET /api/order/user/{userId}
+          // ──────────────────────────────────────────────────────────────
+          [HttpGet("user/{userId:int}")]
+          public async Task<IActionResult> GetOrdersByUser(int userId)
+          {
+               var orders = await _orderFacade.GetOrdersByUserAsync(userId);
+               return Ok(orders);
+          }
+
+          // ──────────────────────────────────────────────────────────────
+          // GET /api/order/templates
+          // Lista tuturor comenzilor disponibile ca template (Prototype Pattern)
+          // ──────────────────────────────────────────────────────────────
+          [HttpGet("templates")]
+          public async Task<IActionResult> GetTemplates()
+          {
+               var templates = await _templateService.GetAllTemplatesAsync();
+               return Ok(templates);
+          }
+
+          // ──────────────────────────────────────────────────────────────
+          // POST /api/order/clone/{templateId}
+          // Prototype Pattern:
+          //   Cloneaza comanda {templateId}, actualizeaza preturile din DB,
+          //   ajusteaza cantitatile si genereaza devizul comparativ.
+          // ──────────────────────────────────────────────────────────────
+          [HttpPost("clone/{templateId:int}")]
+          public async Task<IActionResult> CloneOrder(
+               int templateId,
+               [FromBody] CloneOrderRequest request)
+          {
+               try
+               {
+                    var response = await _templateService.CloneAsync(templateId, request);
+
+                    return Ok(new
+                    {
+                         Message          = $"Comanda #{templateId} clonata cu succes. Noua comanda ID: {response.DbId}.",
+                         NewOrderId       = response.DbId,
+                         TemplateId       = response.TemplateOrderId,
+                         OldTotal         = response.OldTotal,
+                         NewTotal         = response.NewTotal,
+                         Difference       = response.Difference,
+                         DifferencePercent = $"{response.DifferencePercent:+0.00;-0.00}%",
+                         ChangedPrices    = response.ChangedPricesCount,
+                         PriceUpdates     = response.PriceUpdates,
+                         Deviz            = response.Deviz
+                    });
+               }
+               catch (KeyNotFoundException ex)
+               {
+                    return NotFound(new { Error = ex.Message });
+               }
+          }
+
+          // ─── Helper ─────────────────────────────────────────────────
+          private static OrderResponse BuildResponse(string message, Domain.Models.OrderData order, string report, int dbId)
+               => new()
+               {
+                    DbId            = dbId,
+                    BuilderId       = order.BuilderId,
+                    UserId          = order.UserId,
+                    Items           = order.Items,
+                    DeliveryAddress = order.DeliveryAddress,
+                    DeliveryType    = order.DeliveryType,
+                    DeliveryCost    = order.DeliveryCost,
+                    HasInstallation = order.HasInstallation,
+                    IsPriority      = order.IsPriority,
+                    Discount        = order.Discount,
+                    Notes           = order.Notes,
+                    TotalPrice      = order.TotalPrice,
+                    Status          = order.Status,
+                    CreatedAt       = order.CreatedAt,
+                    Report          = report
+               };
      }
 }

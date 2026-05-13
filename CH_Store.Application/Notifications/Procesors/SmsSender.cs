@@ -1,17 +1,21 @@
-﻿using CH_Store.Application.Notifications.Interfaces;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using CH_Store.Application.Notifications.Interfaces;
 
 namespace CH_Store.Application.Notifications.Procesors
 {
+     /// <summary>
+     /// Concrete Product A2 — livreaza mesajul prin SMS.
+     /// Subiectul este ignorat (SMS nu are camp de subiect).
+     /// In productie: se integreaza cu Twilio / SMSC / gateway local.
+     /// </summary>
      public class SmsSender : IMessageSender
      {
-          public void Send(string content)
+          public void Send(string to, string subject, string content)
           {
-               Console.WriteLine($"[SMS Gateway] Trimitere SMS scurt: {content}");
+               Console.WriteLine("─────────────────────────────────────────────");
+               Console.WriteLine($"[SMS - SIMULAT]");
+               Console.WriteLine($"  Catre  : {to}");
+               Console.WriteLine($"  Mesaj  : {content}");
+               Console.WriteLine("─────────────────────────────────────────────");
           }
      }
 }

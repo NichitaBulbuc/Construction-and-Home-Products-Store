@@ -1,61 +1,63 @@
-﻿using CH_Store.Application.Order.Interfaces;
-using CH_Store.Application.Payments.Interfaces;
-using CH_Store.Application.Payments.Services;
+using CH_Store.Application.DbRepo;
+using CH_Store.Application.Order.Interfaces;
 using CH_Store.Domain.DTOs;
-using CH_Store.Domain.Enums;
+using CH_Store.Domain.Entities;
 using CH_Store.Domain.Models;
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CH_Store.Application.Order.Services
 {
-     public class OrderFacade: IOrderFacade
+     public class OrderFacade : IOrderFacade
      {
+          private readonly IOrderRepo _orderRepo;
 
-          public (OrderData Order, string Report) PlaceOrder(OrderRequest dto, bool isFullOrder)
+          public OrderFacade(IOrderRepo orderRepo)
+               => _orderRepo = orderRepo;
+
+          // ─── Metoda privata comuna — evita duplicarea ───────────────────
+          private async Task<(OrderData Order, string Report, int DbId)> BuildAndSaveAsync(
+               OrderRequest dto,
+               Action<OrderDirector, OrderRequest> constructStrategy)
           {
-               Console.WriteLine("\n--- [FACADE] Începere procesare comandă ---");
-
-               // --- PASUL 1: CONSTRUCȚIE ORDERDATA ---
-               var orderBuilder = new OrderBuilder();
-               var orderDirector = new OrderDirector(orderBuilder);
-
-               if (isFullOrder)
-               {
-                    Console.WriteLine("[CHECKPOINT] Director: Execut rețeta 'Full Order' pentru date...");
-                    orderDirector.ConstructFullOrder(dto);
-               }
-               else
-               {
-                    Console.WriteLine("[CHECKPOINT] Director: Execut rețeta 'Standard Order' pentru date...");
-                    orderDirector.ConstructStandardOrder(dto);
-               }
-
+               // Pasul 1: Construire date comanda
+               var orderBuilder    = new OrderBuilder();
+               var orderDirector   = new OrderDirector(orderBuilder);
+               constructStrategy(orderDirector, dto);
                var order = orderBuilder.GetResult();
-               Console.WriteLine($"[CHECKPOINT] Builder: Obiect OrderData creat. Total de plată: {order.TotalPrice} MDL");
 
-               // --- PASUL 2: GENERARE RAPORT ---
-               var reportBuilder = new OrderReportBuilder();
-               var reportDirector = new OrderDirector(reportBuilder);
-
-               if (isFullOrder)
-               {
-                    Console.WriteLine("[CHECKPOINT] Director: Generare raport Full...");
-                    reportDirector.ConstructFullOrder(dto);
-               }
-               else
-               {
-                    Console.WriteLine("[CHECKPOINT] Director: Generare raport Standard...");
-                    reportDirector.ConstructStandardOrder(dto);
-               }
-
+               // Pasul 2: Generare raport cu aceeasi reteta
+               var reportBuilder   = new OrderReportBuilder();
+               var reportDirector  = new OrderDirector(reportBuilder);
+               constructStrategy(reportDirector, dto);
                var report = reportBuilder.GetResult();
-               Console.WriteLine("[CHECKPOINT] Builder: Raport text generat cu succes.");
 
-               return (order, report);
+               // Pasul 3: Atasam raportul la comanda (salvat in DB ca snapshot)
+               order.ReportSnapshot = report;
+
+               // Pasul 4: Persistenta prin OrderRepo -> AppDbContext -> SQL Server
+               int dbId = await _orderRepo.SaveAsync(order);
+
+               return (order, report, dbId);
           }
+
+          // ─── Endpoint-uri publice ────────────────────────────────────────
+
+          public Task<(OrderData Order, string Report, int DbId)> PlaceStandardOrderAsync(OrderRequest dto)
+               => BuildAndSaveAsync(dto, (d, r) => d.ConstructStandardOrder(r));
+
+          public Task<(OrderData Order, string Report, int DbId)> PlaceFullOrderAsync(OrderRequest dto)
+               => BuildAndSaveAsync(dto, (d, r) => d.ConstructFullOrder(r));
+
+          public Task<(OrderData Order, string Report, int DbId)> PlaceExpressOrderAsync(OrderRequest dto)
+               => BuildAndSaveAsync(dto, (d, r) => d.ConstructExpressOrder(r));
+
+          public Task<(OrderData Order, string Report, int DbId)> PlaceBulkOrderAsync(OrderRequest dto)
+               => BuildAndSaveAsync(dto, (d, r) => d.ConstructBulkOrder(r));
+
+          public Task<OrderDbTable?> GetOrderAsync(int id)
+               => _orderRepo.GetByIdAsync(id);
+
+          public Task<IEnumerable<OrderDbTable>> GetOrdersByUserAsync(int userId)
+               => _orderRepo.GetByUserIdAsync(userId);
      }
 }

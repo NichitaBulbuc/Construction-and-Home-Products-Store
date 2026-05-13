@@ -1,56 +1,67 @@
-﻿using Application.DBContext;
+using Application.DBContext;
 using CH_Store.Application.DBContext;
+using CH_Store.Application.DbRepo;
+using CH_Store.Application.Notifications;
 using CH_Store.Application.Notifications.Interfaces;
 using CH_Store.Application.Notifications.Services;
 using CH_Store.Application.Order.Interfaces;
+using NotificationService = CH_Store.Application.Notifications.Services.NotificationService;
 using CH_Store.Application.Order.Services;
+using OrderTemplateService = CH_Store.Application.Order.Services.OrderTemplateService;
 using CH_Store.Application.Payments.Services;
 using CH_Store.Application.Product.Interfaces;
 using CH_Store.Application.Product.Proxy;
 using CH_Store.Application.Product.Services;
 using CH_Store.Domain.Models;
 using Microsoft.EntityFrameworkCore;
-using System;
 using System.Text.Json.Serialization;
-
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
+// ─── Baza de date principala (SQL Server) ───────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddDbContext<PaymentContext>
-     (opt => opt.UseInMemoryDatabase("CH_StoreDb"));
+// ─── Repository pentru comenzi (citire/scriere in AppDbContext) ─────────────
+builder.Services.AddScoped<IOrderRepo, OrderRepo>();
+builder.Services.AddScoped<IOrderFacade, OrderFacade>();
+builder.Services.AddScoped<IOrderTemplateService, OrderTemplateService>();
 
-// Înregistrăm Factory-ul ca Singleton (sau Scoped)
-builder.Services.AddScoped<PaymentProvider>();
+// ─── Contexte InMemory pentru modulele existente (Payment, Notification, Product) ─
+builder.Services.AddDbContext<PaymentContext>(opt =>
+    opt.UseInMemoryDatabase("CH_StoreDb"));
 
-//Configurare In-Memory Database
 builder.Services.AddDbContext<NotificationContext>(options =>
     options.UseInMemoryDatabase("CH_StoreDb"));
-builder.Services.AddDbContext<OrderContext>(options =>
-    options.UseInMemoryDatabase("CH_StoreDb"));
-builder.Services.AddScoped<IOrderFacade, OrderFacade>();
+
 builder.Services.AddDbContext<ProductContext>(options =>
     options.UseInMemoryDatabase("CH_StoreDb"));
 
-// Înregistrare Fabrici (Abstract Factory)
+// ─── Payment ────────────────────────────────────────────────────────────────
+builder.Services.AddScoped<PaymentProvider>();
+
+// ─── SMTP Settings (binding din appsettings.json → IOptions<SmtpSettings>) ───
+builder.Services.Configure<SmtpSettings>(
+    builder.Configuration.GetSection("SmtpSettings"));
+
+// ─── Notifications (Abstract Factory) ────────────────────────────────────────
 builder.Services.AddTransient<EmailNotificationFactory>();
 builder.Services.AddTransient<SmsNotificationFactory>();
 
-// Resolver pentru a alege fabrica la runtime
+// Resolver: alege Concrete Factory-ul pe baza canalului ("email" / "sms")
 builder.Services.AddTransient<Func<string, INotificationFactory>>(serviceProvider => key =>
 {
      return key.ToLower() switch
      {
-          "sms" => serviceProvider.GetRequiredService<SmsNotificationFactory>(),
+          "sms"   => serviceProvider.GetRequiredService<SmsNotificationFactory>(),
           "email" => serviceProvider.GetRequiredService<EmailNotificationFactory>(),
-          _ => serviceProvider.GetRequiredService<EmailNotificationFactory>()
+          _       => serviceProvider.GetRequiredService<EmailNotificationFactory>()
      };
 });
 
+builder.Services.AddScoped<INotificationService, NotificationService>();
+
+// ─── Product ─────────────────────────────────────────────────────────────────
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<IProductRepo>(provider =>
 {
@@ -58,87 +69,56 @@ builder.Services.AddScoped<IProductRepo>(provider =>
      return new ProductRemoteProxy(realService);
 });
 
-// 2. Configurare Prototype Registry ca Singleton
+// ─── Prototype Registry (Singleton) ─────────────────────────────────────────
 var registry = new ProductRegistry();
 
-// Populăm registrul cu date "default" (șabloane)
 registry.AddItem("construction", new ConstructionProduct(new ProductPrototypeData
 {
-     Name = "Ciment Standard",
-     Price = 45.0,
+     Name   = "Ciment Standard",
+     Price  = 45.0,
      Weight = 20.0
 }));
 
 registry.AddItem("home", new HomeProduct(new ProductPrototypeData
 {
-     Name = "Televizor Smart",
-     Price = 2500.0,
+     Name        = "Televizor Smart",
+     Price       = 2500.0,
      EnergyClass = "A++"
 }));
+
 builder.Services.AddSingleton(registry);
 
+// ─── Controllers + JSON ──────────────────────────────────────────────────────
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+         options.JsonSerializerOptions.WriteIndented    = true;
+    });
+
+builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-         // Transformă Enum-urile în String-uri în JSON (ex: "Card" în loc de 0)
-         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-    });
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-
-// În Program.cs, la adăugarea controllerelor:
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-         // Această opțiune ajută dacă ai kituri care se referă unul pe altul
-         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
-         options.JsonSerializerOptions.WriteIndented = true; // Pentru un JSON frumos în browser
-    });
-
+// ─── Seed data InMemory (Product demo) ──────────────────────────────────────
 var app = builder.Build();
 
-// --- SECȚIUNEA DE SEED DATA (Produse pentru Demo) ---
 using (var scope = app.Services.CreateScope())
 {
      var context = scope.ServiceProvider.GetRequiredService<ProductContext>();
 
-     // Adăugăm câteva produse de test dacă baza e goală
      if (!context.Products.Any())
      {
           context.Products.AddRange(
-              new ProductPrototypeData
-              {
-                   Id = 1,
-                   Name = "Ciment Holcim 40kg",
-                   Price = 95.0,
-                   Weight = 40,
-                   Description = "Ideal pentru fundații"
-              },
-              new ProductPrototypeData
-              {
-                   Id = 2,
-                   Name = "Bormașină Bosch Professional",
-                   Price = 1200.0,
-                   EnergyClass = "A+",
-                   Description = "Acumulator inclus"
-              },
-              new ProductPrototypeData
-              {
-                   Id = 3,
-                   Name = "Vopsea Lavabilă Albă 15L",
-                   Price = 450.0,
-                   Weight = 20,
-                   Description = "Acoperire mare"
-              }
+              new ProductPrototypeData { Id = 1, Name = "Ciment Holcim 40kg",          Price = 95.0,   Weight = 40,  Description = "Ideal pentru fundatii"  },
+              new ProductPrototypeData { Id = 2, Name = "Bormasina Bosch Professional", Price = 1200.0, EnergyClass = "A+",         Description = "Acumulator inclus" },
+              new ProductPrototypeData { Id = 3, Name = "Vopsea Lavabila Alba 15L",     Price = 450.0,  Weight = 20,  Description = "Acoperire mare"          }
           );
           context.SaveChanges();
      }
 }
 
-// Configure the HTTP request pipeline.
+// ─── Middleware pipeline ──────────────────────────────────────────────────────
 if (app.Environment.IsDevelopment())
 {
      app.UseSwagger();
@@ -146,9 +126,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.Run();

@@ -1,23 +1,30 @@
-﻿using CH_Store.Application.Notifications.Interfaces;
+using CH_Store.Application.Notifications.Interfaces;
 using CH_Store.Application.Notifications.Procesors;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Microsoft.Extensions.Options;
 
 namespace CH_Store.Application.Notifications.Services
 {
+     /// <summary>
+     /// Concrete Factory 1 — creeaza familia de produse Email.
+     ///
+     /// Primeste SmtpSettings din DI si le paseaza la EmailSender.
+     /// EmailTemplate nu are dependente externe — se instantiaza direct.
+     /// </summary>
      public class EmailNotificationFactory : INotificationFactory
      {
-          public IMessageSender CreateSender()
+          private readonly SmtpSettings _smtpSettings;
+
+          public EmailNotificationFactory(IOptions<SmtpSettings> smtpOptions)
           {
-               return new EmailSender();
+               _smtpSettings = smtpOptions.Value;
           }
 
+          /// <summary>Creeaza EmailSender configurat cu setarile SMTP din appsettings.</summary>
+          public IMessageSender CreateSender()
+               => new EmailSender(_smtpSettings);
+
+          /// <summary>Creeaza EmailTemplate — genereaza HTML complet cu subiect per eveniment.</summary>
           public ITemplateProvider CreateTemplate()
-          {
-               return new EmailTemplate();
-          }
+               => new EmailTemplate();
      }
 }

@@ -1,52 +1,40 @@
 using CH_Store.Application.DbRepo;
-using CH_Store.Application.Notifications.Interfaces;
 using CH_Store.Application.Order.Interfaces;
+using CH_Store.Application.Order.Observer;
 using CH_Store.Application.Payments.Services;
 using CH_Store.Domain.DTOs;
 using CH_Store.Domain.Entities;
-using CH_Store.Domain.Enums;
+using CH_Store.Domain.Events;
 using CH_Store.Domain.Models;
 
 namespace CH_Store.Application.Order.Services
 {
      /// <summary>
-     /// Facade Pattern — punct unic de intrare care orchestreaza toate subsistemele:
+     /// Facade Pattern — orchestreaza toate subsistemele.
      ///
-     ///   ┌─────────────────────────────────────────────────────┐
-     ///   │                   OrderFacade                        │
-     ///   │                                                      │
-     ///   │  ┌─────────────┐  ┌────────────┐  ┌─────────────┐  │
-     ///   │  │   Builder   │  │  Payment   │  │Notification │  │
-     ///   │  │  subsystem  │  │ subsystem  │  │  subsystem  │  │
-     ///   │  │             │  │            │  │             │  │
-     ///   │  │ OrderBuilder│  │PaymentProv.│  │Notification │  │
-     ///   │  │ ReportBuild.│  │PaymentServ.│  │  Service    │  │
-     ///   │  │ OrderDirector│ │StripeAdapt.│  │ AbstrFactory│  │
-     ///   │  └─────────────┘  └────────────┘  └─────────────┘  │
-     ///   │         │                │                │         │
-     ///   │         └────────────────┴────────────────┘         │
-     ///   │                          │                           │
-     ///   │                   ┌─────────────┐                   │
-     ///   │                   │  OrderRepo  │ (SQL Server)       │
-     ///   │                   └─────────────┘                   │
-     ///   └─────────────────────────────────────────────────────┘
+     /// Dupa integrarea Observer Pattern:
+     ///   • INotificationService este ELIMINAT din Facade
+     ///   • Notificarile sunt delegate catre CustomerNotificationObserver (via Publisher)
+     ///   • Actualizarea stocului este delegata catre StockObserver (via Publisher)
+     ///   • Audit log-ul este delegat catre AdminDashboardObserver (via Publisher)
      ///
-     /// Controllerul apeleaza o singura metoda si primeste rezultatul complet.
+     /// Facade nu mai stie de notificari, stocuri sau logging — le publica ca eveniment
+     /// si observatorii reactioneaza independent, fiecare cu responsabilitatea sa.
      /// </summary>
      public class OrderFacade : IOrderFacade
      {
-          private readonly IOrderRepo           _orderRepo;
-          private readonly PaymentProvider      _paymentProvider;
-          private readonly INotificationService _notificationService;
+          private readonly IOrderRepo          _orderRepo;
+          private readonly PaymentProvider     _paymentProvider;
+          private readonly IOrderEventPublisher _eventPublisher;
 
           public OrderFacade(
                IOrderRepo           orderRepo,
                PaymentProvider      paymentProvider,
-               INotificationService notificationService)
+               IOrderEventPublisher eventPublisher)
           {
-               _orderRepo           = orderRepo;
-               _paymentProvider     = paymentProvider;
-               _notificationService = notificationService;
+               _orderRepo      = orderRepo;
+               _paymentProvider = paymentProvider;
+               _eventPublisher = eventPublisher;
           }
 
           // ════════════════════════════════════════════════════════════════════
@@ -66,37 +54,18 @@ namespace CH_Store.Application.Order.Services
                => BuildAndSaveAsync(dto, (d, r) => d.ConstructBulkOrder(r));
 
           // ════════════════════════════════════════════════════════════════════
-          // PLASARE COMANDA CU PLATA — Builder + Payment + Notification + Persistenta
+          // PLASARE COMANDA CU PLATA — Builder + Payment + Observer
           // ════════════════════════════════════════════════════════════════════
 
-          /// <summary>
-          /// Fluxul complet al comenzii cu plata integrata:
-          ///
-          ///   Pas 1 — Builder Pattern:
-          ///     OrderBuilder + OrderReportBuilder construiesc datele comenzii
-          ///     si raportul via OrderDirector (aceeasi reteta pentru ambii builderi).
-          ///
-          ///   Pas 2 — Persistenta:
-          ///     OrderRepo salveaza comanda in SQL Server, genereaza ID-ul.
-          ///
-          ///   Pas 3 — Adapter + Factory Method:
-          ///     PaymentProvider selecteaza Concrete Creator (ex: StripePaymentService)
-          ///     care creeaza Adapter-ul (StripePaymentAdapter) si proceseaza plata.
-          ///     Suma = TotalPrice al comenzii.
-          ///
-          ///   Pas 4 — Abstract Factory (Notification):
-          ///     NotificationService trimite confirmare comenzii via canalul ales.
-          ///     Daca plata a esuat, se trimite notificare de esec in loc de confirmare.
-          /// </summary>
           public async Task<OrderWithPaymentResponse> PlaceOrderWithPaymentAsync(OrderWithPaymentRequest dto)
           {
-               // ── Pas 1 + 2: Builder + Persistenta ──────────────────────────────
+               // ── Pas 1 + 2: Builder Pattern + Persistenta ───────────────────────
                var (order, report, dbId) = await BuildAndSaveAsync(dto, (d, r) => d.ConstructFullOrder(r));
 
-               // ── Pas 3: Payment subsystem ───────────────────────────────────────
-               bool   paymentSuccess = false;
-               string paymentTxId    = "";
-               string paymentMessage = "";
+               // ── Pas 3: Payment subsystem (Factory Method + Adapter) ────────────
+               bool   paymentSuccess  = false;
+               string paymentTxId     = "";
+               string paymentMessage  = "";
 
                try
                {
@@ -112,45 +81,29 @@ namespace CH_Store.Application.Order.Services
                     paymentMessage = $"Eroare la procesarea platii: {ex.Message}";
                }
 
-               // ── Pas 4: Notification subsystem ─────────────────────────────────
-               bool notificationSent = false;
+               // ── Pas 4: Determina noul status si actualizeaza DB ────────────────
+               string newStatus = paymentSuccess ? "Processing" : "PaymentFailed";
+               await _orderRepo.UpdateStatusAsync(dbId, newStatus);
+               order.Status = newStatus;
 
-               if (!string.IsNullOrWhiteSpace(dto.RecipientContact))
+               // ── Pas 5: Observer Pattern — publica eveniment ───────────────────
+               // CustomerNotificationObserver → trimite email/SMS
+               // StockObserver               → decrementeaza stoc (daca Processing)
+               // AdminDashboardObserver      → salveaza audit log
+               await _eventPublisher.PublishAsync(new OrderStatusChangedEvent
                {
-                    try
-                    {
-                         if (paymentSuccess)
-                         {
-                              _notificationService.NotifyOrderAccepted(
-                                   orderId       : dbId,
-                                   total         : order.TotalPrice,
-                                   recipientName : dto.RecipientName,
-                                   channel       : dto.NotificationChannel,
-                                   recipient     : dto.RecipientContact);
-                         }
-                         else
-                         {
-                              // Plata esuata — notifica clientul
-                              _notificationService.NotifyOrderCancelled(
-                                   orderId       : dbId,
-                                   recipientName : dto.RecipientName,
-                                   channel       : dto.NotificationChannel,
-                                   recipient     : dto.RecipientContact);
+                    OrderId            = dbId,
+                    UserId             = order.UserId,
+                    OldStatus          = "New",
+                    NewStatus          = newStatus,
+                    OrderTotal         = order.TotalPrice,
+                    Items              = order.Items.Select(i => new OrderEventItem(i.ProductId, i.ProductName, i.Quantity)).ToList(),
+                    RecipientContact   = dto.RecipientContact,
+                    RecipientName      = dto.RecipientName,
+                    NotificationChannel = dto.NotificationChannel
+               });
 
-                              // Actualizeaza statusul comenzii la Cancelled daca plata a esuat
-                              await _orderRepo.UpdateStatusAsync(dbId, "PaymentFailed");
-                              order.Status = "PaymentFailed";
-                         }
-
-                         notificationSent = true;
-                    }
-                    catch (Exception ex)
-                    {
-                         Console.WriteLine($"[OrderFacade] Notificarea nu a putut fi trimisa: {ex.Message}");
-                    }
-               }
-
-               // ── Asamblare raspuns complet ──────────────────────────────────────
+               // ── Pas 6: Asamblare raspuns complet ──────────────────────────────
                return new OrderWithPaymentResponse
                {
                     DbId            = dbId,
@@ -174,71 +127,43 @@ namespace CH_Store.Application.Order.Services
                     PaymentMessage       = paymentMessage,
                     PaymentMethod        = dto.PaymentMethod.ToString(),
 
-                    NotificationSent    = notificationSent,
+                    NotificationSent    = !string.IsNullOrWhiteSpace(dto.RecipientContact),
                     NotificationChannel = dto.NotificationChannel
                };
           }
 
           // ════════════════════════════════════════════════════════════════════
-          // GESTIONARE STATUS — Persistenta + Notificare automata
+          // GESTIONARE STATUS — Persistenta + Observer
           // ════════════════════════════════════════════════════════════════════
 
-          /// <summary>
-          /// Actualizeaza statusul comenzii si declanseaza notificarea corecta per status:
-          ///   "Processing" → NotifyOrderAccepted  (confirmarea acceptarii comenzii)
-          ///   "Shipped"    → NotifyOrderShipped   (cu estimare livrare +3 zile)
-          ///   "Delivered"  → NotifyOrderDelivered
-          ///   "Cancelled"  → NotifyOrderCancelled
-          ///   Orice alt status → doar update in DB, fara notificare
-          /// </summary>
           public async Task<OrderOperationResult> UpdateOrderStatusAsync(int orderId, OrderStatusRequest request)
           {
                if (string.IsNullOrWhiteSpace(request.NewStatus))
                     return Fail(orderId, "Statusul nou nu poate fi gol.");
 
-               bool updated = await _orderRepo.UpdateStatusAsync(orderId, request.NewStatus);
-
-               if (!updated)
+               // Incarcam comanda completa (avem nevoie de OldStatus + Items pentru eveniment)
+               var order = await _orderRepo.GetByIdAsync(orderId);
+               if (order == null)
                     return Fail(orderId, $"Comanda cu ID {orderId} nu a fost gasita.");
 
-               bool notificationSent = false;
+               string oldStatus = order.Status;
+               await _orderRepo.UpdateStatusAsync(orderId, request.NewStatus);
 
-               if (request.HasNotificationData)
-               {
-                    try
-                    {
-                         string channel    = request.NotificationChannel!;
-                         string recipient  = request.RecipientContact!;
-                         string name       = request.RecipientName ?? "";
-
-                         notificationSent = SendStatusNotification(
-                              request.NewStatus, orderId, channel, recipient, name);
-                    }
-                    catch (Exception ex)
-                    {
-                         Console.WriteLine($"[OrderFacade] Notificarea status nu a putut fi trimisa: {ex.Message}");
-                    }
-               }
+               // Publica eveniment → toti observatorii notificati automat
+               await _eventPublisher.PublishAsync(BuildEvent(order, oldStatus, request.NewStatus, request));
 
                return new OrderOperationResult
                {
                     Success          = true,
                     OrderId          = orderId,
                     NewStatus        = request.NewStatus,
-                    NotificationSent = notificationSent,
-                    Message          = $"Statusul comenzii #{orderId} a fost actualizat la '{request.NewStatus}'." +
-                                       (notificationSent ? " Notificare trimisa." : "")
+                    NotificationSent = request.HasNotificationData,
+                    Message          = $"Statusul comenzii #{orderId} actualizat: {oldStatus} → {request.NewStatus}."
                };
           }
 
-          /// <summary>
-          /// Anuleaza comanda (status → "Cancelled") si trimite notificare daca
-          /// datele de contact sunt disponibile in request.
-          /// Nu poate anula o comanda deja anulata sau livrata.
-          /// </summary>
           public async Task<OrderOperationResult> CancelOrderAsync(int orderId, OrderStatusRequest? notification = null)
           {
-               // Verifica daca comanda exista si poate fi anulata
                var order = await _orderRepo.GetByIdAsync(orderId);
 
                if (order == null)
@@ -248,46 +173,23 @@ namespace CH_Store.Application.Order.Services
                     return Fail(orderId, $"Comanda #{orderId} este deja anulata (status: {order.Status}).");
 
                if (order.Status == "Delivered")
-                    return Fail(orderId, $"Comanda #{orderId} a fost deja livrata si nu poate fi anulata.");
+                    return Fail(orderId, $"Comanda #{orderId} a fost livrata si nu poate fi anulata.");
 
-               // Actualizeaza statusul
+               string oldStatus = order.Status;
                await _orderRepo.UpdateStatusAsync(orderId, "Cancelled");
 
-               bool notificationSent = false;
+               var req = notification ?? new OrderStatusRequest();
+               await _eventPublisher.PublishAsync(BuildEvent(order, oldStatus, "Cancelled", req));
 
-               // Trimite notificare daca sunt furnizate datele de contact
-               var notifRequest = notification ?? new OrderStatusRequest();
-
-               if (notifRequest.HasNotificationData)
-               {
-                    try
-                    {
-                         _notificationService.NotifyOrderCancelled(
-                              orderId       : orderId,
-                              recipientName : notifRequest.RecipientName ?? "",
-                              channel       : notifRequest.NotificationChannel!,
-                              recipient     : notifRequest.RecipientContact!);
-
-                         notificationSent = true;
-                    }
-                    catch (Exception ex)
-                    {
-                         Console.WriteLine($"[OrderFacade] Notificarea de anulare nu a putut fi trimisa: {ex.Message}");
-                    }
-               }
-
-               string reason = !string.IsNullOrWhiteSpace(notifRequest.Reason)
-                    ? $" Motiv: {notifRequest.Reason}."
-                    : "";
+               string reason = !string.IsNullOrWhiteSpace(req.Reason) ? $" Motiv: {req.Reason}." : "";
 
                return new OrderOperationResult
                {
                     Success          = true,
                     OrderId          = orderId,
                     NewStatus        = "Cancelled",
-                    NotificationSent = notificationSent,
-                    Message          = $"Comanda #{orderId} a fost anulata cu succes.{reason}" +
-                                       (notificationSent ? " Notificare trimisa." : "")
+                    NotificationSent = req.HasNotificationData,
+                    Message          = $"Comanda #{orderId} anulata.{reason}"
                };
           }
 
@@ -301,93 +203,56 @@ namespace CH_Store.Application.Order.Services
           public Task<IEnumerable<OrderDbTable>> GetOrdersByUserAsync(int userId)
                => _orderRepo.GetByUserIdAsync(userId);
 
+          public Task<IEnumerable<OrderEventLogDbTable>> GetOrderEventsAsync(int orderId)
+               => _orderRepo.GetOrderEventsAsync(orderId);
+
+          public Task<IEnumerable<OrderEventLogDbTable>> GetAllEventsAsync()
+               => _orderRepo.GetAllEventsAsync();
+
           // ════════════════════════════════════════════════════════════════════
-          // METODE PRIVATE — logica interna
+          // METODE PRIVATE
           // ════════════════════════════════════════════════════════════════════
 
-          /// <summary>
-          /// Nucleul Builder Pattern:
-          /// Construieste OrderData si raportul text folosind aceeasi reteta (strategy)
-          /// pe doi builderi diferiti, apoi salveaza rezultatul prin OrderRepo.
-          /// </summary>
           private async Task<(OrderData Order, string Report, int DbId)> BuildAndSaveAsync(
                OrderRequest dto,
                Action<OrderDirector, OrderRequest> constructStrategy)
           {
-               // ── Builder 1: OrderData ───────────────────────────────────────────
                var orderBuilder  = new OrderBuilder();
                var orderDirector = new OrderDirector(orderBuilder);
                constructStrategy(orderDirector, dto);
                var order = orderBuilder.GetResult();
 
-               // ── Builder 2: Raport text ─────────────────────────────────────────
                var reportBuilder  = new OrderReportBuilder();
                var reportDirector = new OrderDirector(reportBuilder);
                constructStrategy(reportDirector, dto);
                var report = reportBuilder.GetResult();
 
-               // ── Atasam raportul la comanda (persista ca snapshot in DB) ─────────
                order.ReportSnapshot = report;
-
-               // ── Persistenta prin OrderRepo → AppDbContext → SQL Server ──────────
                int dbId = await _orderRepo.SaveAsync(order);
 
                return (order, report, dbId);
           }
 
           /// <summary>
-          /// Alege si trimite notificarea corecta in functie de noul status al comenzii.
-          /// Returneaza true daca notificarea a fost trimisa.
+          /// Construieste evenimentul Observer din entitatea DB a comenzii.
           /// </summary>
-          private bool SendStatusNotification(
-               string status, int orderId,
-               string channel, string recipient, string recipientName)
+          private static OrderStatusChangedEvent BuildEvent(
+               OrderDbTable order,
+               string oldStatus,
+               string newStatus,
+               OrderStatusRequest req) => new()
           {
-               switch (status.ToLower())
-               {
-                    case "processing":
-                         // Comanda acceptata si in procesare — trimitem confirmare
-                         _notificationService.NotifyOrderAccepted(
-                              orderId       : orderId,
-                              total         : 0m,      // total nu este disponibil la update status
-                              recipientName : recipientName,
-                              channel       : channel,
-                              recipient     : recipient);
-                         return true;
+               OrderId            = order.Id,
+               UserId             = order.UserId,
+               OldStatus          = oldStatus,
+               NewStatus          = newStatus,
+               OrderTotal         = order.TotalAmount,
+               Items              = order.Items.Select(i => new OrderEventItem(i.ProductId, i.ProductName, i.Quantity)).ToList(),
+               RecipientContact   = req.RecipientContact,
+               RecipientName      = req.RecipientName ?? "",
+               NotificationChannel = req.NotificationChannel ?? "email"
+          };
 
-                    case "shipped":
-                         // Comanda expediata — estimam livrarea la +3 zile lucratoare
-                         _notificationService.NotifyOrderShipped(
-                              orderId           : orderId,
-                              estimatedDelivery : DateTime.UtcNow.AddDays(3),
-                              recipientName     : recipientName,
-                              channel           : channel,
-                              recipient         : recipient);
-                         return true;
-
-                    case "delivered":
-                         _notificationService.NotifyOrderDelivered(
-                              orderId       : orderId,
-                              recipientName : recipientName,
-                              channel       : channel,
-                              recipient     : recipient);
-                         return true;
-
-                    case "cancelled":
-                         _notificationService.NotifyOrderCancelled(
-                              orderId       : orderId,
-                              recipientName : recipientName,
-                              channel       : channel,
-                              recipient     : recipient);
-                         return true;
-
-                    default:
-                         // Statusuri custom (ex: "OnHold", "BackOrder") — fara notificare automata
-                         return false;
-               }
-          }
-
-          /// <summary>Helper pentru raspunsuri de eroare.</summary>
           private static OrderOperationResult Fail(int orderId, string message)
                => new() { Success = false, OrderId = orderId, Message = message };
      }

@@ -5,6 +5,7 @@ using CH_Store.Application.Notifications;
 using CH_Store.Application.Notifications.Interfaces;
 using CH_Store.Application.Notifications.Services;
 using CH_Store.Application.Order.Interfaces;
+using CH_Store.Application.Order.Observer;
 using NotificationService = CH_Store.Application.Notifications.Services.NotificationService;
 using CH_Store.Application.Order.Services;
 using OrderTemplateService = CH_Store.Application.Order.Services.OrderTemplateService;
@@ -27,8 +28,20 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // ─── Repository pentru comenzi (citire/scriere in AppDbContext) ─────────────
 builder.Services.AddScoped<IOrderRepo, OrderRepo>();
-builder.Services.AddScoped<IOrderFacade, OrderFacade>();
 builder.Services.AddScoped<IOrderTemplateService, OrderTemplateService>();
+
+// ─── Observer Pattern ────────────────────────────────────────────────────────
+// Observatori concreți inregistrati ca IOrderObserver — DI ii injecteaza
+// automat ca IEnumerable<IOrderObserver> in OrderEventPublisher.
+builder.Services.AddScoped<IOrderObserver, CustomerNotificationObserver>();
+builder.Services.AddScoped<IOrderObserver, StockObserver>();
+builder.Services.AddScoped<IOrderObserver, AdminDashboardObserver>();
+
+// Subject: primeste lista de observatori injectata automat de DI
+builder.Services.AddScoped<IOrderEventPublisher, OrderEventPublisher>();
+
+// Facade foloseste IOrderEventPublisher (nu mai injecteaza direct INotificationService)
+builder.Services.AddScoped<IOrderFacade, OrderFacade>();
 
 // ─── Contexte InMemory pentru modulele existente (Payment, Notification, Product) ─
 builder.Services.AddDbContext<PaymentContext>(opt =>

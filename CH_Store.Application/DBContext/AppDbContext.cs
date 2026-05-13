@@ -17,6 +17,9 @@ namespace CH_Store.Application.DBContext
           public DbSet<CatalogKitDbTable>     CatalogKits     { get; set; }
           public DbSet<CatalogKitItemDbTable> CatalogKitItems { get; set; }
 
+          // ─── Tabele Observer Pattern (Audit log comenzi) ─────────────────────
+          public DbSet<OrderEventLogDbTable> OrderEventLogs { get; set; }
+
           protected override void OnModelCreating(ModelBuilder modelBuilder)
           {
                base.OnModelCreating(modelBuilder);
@@ -69,6 +72,14 @@ namespace CH_Store.Application.DBContext
                     .WithMany()
                     .HasForeignKey(i => i.SubKitId)
                     .IsRequired(false)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+               // ── OrderEventLogs → Orders ───────────────────────────────────────
+               // NoAction: stergerea unei comenzi nu sterge automat logurile ei
+               modelBuilder.Entity<OrderEventLogDbTable>()
+                    .HasOne(e => e.Order)
+                    .WithMany()
+                    .HasForeignKey(e => e.OrderId)
                     .OnDelete(DeleteBehavior.NoAction);
           }
      }

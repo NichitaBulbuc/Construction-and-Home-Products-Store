@@ -204,6 +204,28 @@ namespace CH_Store.Web.Controllers
                }
           }
 
+          // ──────────────────────────────────────────────────────────────
+          // GET /api/order/{id}/events
+          // Observer audit log: istoricul evenimentelor unei comenzi
+          // ──────────────────────────────────────────────────────────────
+          [HttpGet("{id:int}/events")]
+          public async Task<IActionResult> GetOrderEvents(int id)
+          {
+               var events = await _orderFacade.GetOrderEventsAsync(id);
+               return Ok(events);
+          }
+
+          // ──────────────────────────────────────────────────────────────
+          // GET /api/order/events
+          // Observer audit log: toate evenimentele (admin dashboard)
+          // ──────────────────────────────────────────────────────────────
+          [HttpGet("events")]
+          public async Task<IActionResult> GetAllEvents()
+          {
+               var events = await _orderFacade.GetAllEventsAsync();
+               return Ok(events);
+          }
+
           // ─── Helper ─────────────────────────────────────────────────
           private static OrderResponse BuildResponse(string message, Domain.Models.OrderData order, string report, int dbId)
                => new()

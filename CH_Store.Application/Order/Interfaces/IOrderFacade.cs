@@ -1,6 +1,7 @@
 using CH_Store.Domain.DTOs;
 using CH_Store.Domain.Entities;
 using CH_Store.Domain.Models;
+using CH_Store.Domain.Events;
 
 namespace CH_Store.Application.Order.Interfaces
 {
@@ -65,12 +66,20 @@ namespace CH_Store.Application.Order.Interfaces
           /// </summary>
           Task<OrderOperationResult> CancelOrderAsync(int orderId, OrderStatusRequest? notification = null);
 
-          // ─── Interogari ───────────────────────────────────────────────────────
+          // ─── Interogari comenzi ──────────────────────────────────────────────
 
           /// <summary>Returneaza o comanda din DB dupa ID (cu toate produsele incluse).</summary>
           Task<OrderDbTable?> GetOrderAsync(int id);
 
           /// <summary>Returneaza toate comenzile unui user.</summary>
           Task<IEnumerable<OrderDbTable>> GetOrdersByUserAsync(int userId);
+
+          // ─── Audit log Observer ───────────────────────────────────────────────
+
+          /// <summary>Returneaza istoricul evenimentelor unei comenzi (Observer audit log).</summary>
+          Task<IEnumerable<OrderEventLogDbTable>> GetOrderEventsAsync(int orderId);
+
+          /// <summary>Returneaza toate evenimentele din audit log (admin dashboard).</summary>
+          Task<IEnumerable<OrderEventLogDbTable>> GetAllEventsAsync();
      }
 }

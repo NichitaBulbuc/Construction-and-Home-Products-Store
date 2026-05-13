@@ -26,5 +26,11 @@ namespace CH_Store.Application.DbRepo
           /// Returneaza false daca comanda nu a fost gasita.
           /// </summary>
           Task<bool> UpdateStatusAsync(int orderId, string newStatus);
+
+          /// <summary>Returneaza istoricul evenimentelor unei comenzi (Observer audit log).</summary>
+          Task<IEnumerable<OrderEventLogDbTable>> GetOrderEventsAsync(int orderId);
+
+          /// <summary>Returneaza toate evenimentele din audit log (pentru admin dashboard).</summary>
+          Task<IEnumerable<OrderEventLogDbTable>> GetAllEventsAsync();
      }
 }

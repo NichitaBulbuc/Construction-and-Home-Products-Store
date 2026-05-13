@@ -97,5 +97,22 @@ namespace CH_Store.Application.DbRepo
                await _db.SaveChangesAsync();
                return true;
           }
+
+          /// <inheritdoc/>
+          public async Task<IEnumerable<OrderEventLogDbTable>> GetOrderEventsAsync(int orderId)
+          {
+               return await _db.OrderEventLogs
+                    .Where(e => e.OrderId == orderId)
+                    .OrderByDescending(e => e.OccurredAt)
+                    .ToListAsync();
+          }
+
+          /// <inheritdoc/>
+          public async Task<IEnumerable<OrderEventLogDbTable>> GetAllEventsAsync()
+          {
+               return await _db.OrderEventLogs
+                    .OrderByDescending(e => e.OccurredAt)
+                    .ToListAsync();
+          }
      }
 }

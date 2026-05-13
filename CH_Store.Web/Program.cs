@@ -8,12 +8,15 @@ using CH_Store.Application.Order.Interfaces;
 using NotificationService = CH_Store.Application.Notifications.Services.NotificationService;
 using CH_Store.Application.Order.Services;
 using OrderTemplateService = CH_Store.Application.Order.Services.OrderTemplateService;
+using CH_Store.Application.PaymentAdapter.API;
 using CH_Store.Application.Payments.Services;
 using CH_Store.Application.Product.Interfaces;
 using CH_Store.Application.Product.Proxy;
 using CH_Store.Application.Product.Services;
+using CatalogService = CH_Store.Application.Product.Services.CatalogService;
 using CH_Store.Domain.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -38,6 +41,11 @@ builder.Services.AddDbContext<ProductContext>(options =>
     options.UseInMemoryDatabase("CH_StoreDb"));
 
 // ─── Payment ────────────────────────────────────────────────────────────────
+// Adapter Pattern — inregistreaza Adaptee-ul Stripe ca Singleton:
+//   IStripeExternalApi → StripeExternalApi (simulat)
+//   In productie s-ar inregistra un wrapper real peste Stripe SDK
+builder.Services.AddSingleton<IStripeExternalApi, StripeExternalApi>();
+
 builder.Services.AddScoped<PaymentProvider>();
 
 // ─── SMTP Settings (binding din appsettings.json → IOptions<SmtpSettings>) ───
@@ -62,12 +70,30 @@ builder.Services.AddTransient<Func<string, INotificationFactory>>(serviceProvide
 builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // ─── Product ─────────────────────────────────────────────────────────────────
+
+// IMemoryCache (Singleton) — folosit de ProductRemoteProxy pentru cache in-process
+builder.Services.AddMemoryCache();
+
+// ProductService (InMemory, ProductContext) — ramane pentru Prototype Pattern
 builder.Services.AddScoped<ProductService>();
+
+// ProductDbService — RealSubject (SQL Server, AppDbContext)
+builder.Services.AddScoped<ProductDbService>();
+
+// Remote Proxy Pattern:
+//   IProductRepo → ProductRemoteProxy (Proxy)
+//                      → ProductDbService (RealSubject, SQL Server)
+//   Cache HIT  : returneaza din IMemoryCache (TTL 5 min)
+//   Cache MISS : delegheaza la ProductDbService → AppDbContext → SQL Server
 builder.Services.AddScoped<IProductRepo>(provider =>
 {
-     var realService = provider.GetRequiredService<ProductService>();
-     return new ProductRemoteProxy(realService);
+     var realService = provider.GetRequiredService<ProductDbService>();
+     var cache       = provider.GetRequiredService<IMemoryCache>();
+     return new ProductRemoteProxy(realService, cache);
 });
+
+// ─── Catalog (Composite Pattern) ─────────────────────────────────────────────
+builder.Services.AddScoped<ICatalogService, CatalogService>();
 
 // ─── Prototype Registry (Singleton) ─────────────────────────────────────────
 var registry = new ProductRegistry();

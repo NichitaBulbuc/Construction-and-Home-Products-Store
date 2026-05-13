@@ -20,5 +20,11 @@ namespace CH_Store.Application.DbRepo
 
           /// <summary>Returneaza toate comenzile unui user specific.</summary>
           Task<IEnumerable<OrderDbTable>> GetByUserIdAsync(int userId);
+
+          /// <summary>
+          /// Actualizeaza statusul unei comenzi existente.
+          /// Returneaza false daca comanda nu a fost gasita.
+          /// </summary>
+          Task<bool> UpdateStatusAsync(int orderId, string newStatus);
      }
 }

@@ -6,18 +6,31 @@ using CH_Store.Application.Payments.Interfaces;
 namespace CH_Store.Application.Payments.Services
 {
      /// <summary>
-     /// Concrete Creator — creeaza un StripePaymentAdapter.
-     /// Foloseste pattern-ul Adapter pentru a adapta API-ul extern Stripe
-     /// la interfata IPaymentProcessor ceruta de Factory Method.
+     /// Concrete Creator (Factory Method) — creeaza un StripePaymentAdapter.
+     ///
+     /// Combina doua pattern-uri:
+     ///   Factory Method : suprascrie Create() si returneaza IPaymentProcessor
+     ///   Adapter        : procesorul returnat este StripePaymentAdapter,
+     ///                    care adapteaza IStripeExternalApi la IPaymentProcessor
+     ///
+     /// IStripeExternalApi este injectat prin DI — nu mai este instantiat direct.
+     /// Astfel StripePaymentService nu stie si nu depinde de implementarea concreta
+     /// a API-ului Stripe (StripeExternalApi), respectand Dependency Inversion.
      /// </summary>
      public class StripePaymentService : PaymentService
      {
-          public StripePaymentService(PaymentContext context) : base(context) { }
+          private readonly IStripeExternalApi _stripeExternalApi;
+
+          public StripePaymentService(PaymentContext context, IStripeExternalApi stripeExternalApi)
+               : base(context)
+          {
+               _stripeExternalApi = stripeExternalApi;
+          }
 
           public override IPaymentProcessor Create()
           {
-               var externalApi = new StripeExternalApi();
-               return new StripePaymentAdapter(externalApi);
+               // Adapter Pattern: StripePaymentAdapter primeste IStripeExternalApi (nu concretul)
+               return new StripePaymentAdapter(_stripeExternalApi);
           }
      }
 }

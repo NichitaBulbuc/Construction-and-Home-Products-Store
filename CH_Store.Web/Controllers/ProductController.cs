@@ -1,115 +1,136 @@
-﻿using CH_Store.Application.DBContext;
-using CH_Store.Application.Product.Catalog;
+using CH_Store.Application.DBContext;
 using CH_Store.Application.Product.Interfaces;
+using CH_Store.Application.Product.Proxy;
 using CH_Store.Application.Product.Services;
 using CH_Store.Domain.DTOs;
+using CH_Store.Domain.Entities;
 using CH_Store.Domain.Models;
-using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using System;
 
 namespace CH_Store.Web.Controllers
 {
+     /// <summary>
+     /// Controller pentru produse.
+     ///
+     /// Endpoint-urile de citire (GET) trec prin ProductRemoteProxy (Proxy Pattern):
+     ///   Request → ProductRemoteProxy → [cache HIT] returneaza din IMemoryCache
+     ///                                → [cache MISS] ProductDbService → SQL Server
+     ///
+     /// Endpoint-ul create-from-prototype foloseste Prototype Pattern (InMemory):
+     ///   Request → ProductRegistry → Clone → ProductContext (InMemory)
+     ///
+     /// Endpoint-urile de catalog (Composite Pattern) sunt in CatalogController.
+     /// </summary>
      [ApiController]
      [Route("api/[controller]")]
-     public class ProductController: ControllerBase
+     public class ProductController : ControllerBase
      {
           private readonly ProductRegistry _registry;
-          private readonly ProductContext _context;
-          private readonly IProductRepo _repository;
+          private readonly ProductContext  _prototypeContext;  // InMemory — Prototype Pattern
+          private readonly IProductRepo    _repository;        // Proxy → SQL Server
 
-          public ProductController(ProductRegistry registry, ProductContext context, IProductRepo repository)
+          public ProductController(
+               ProductRegistry registry,
+               ProductContext  prototypeContext,
+               IProductRepo    repository)
           {
-               _registry = registry;
-               _context = context;
-               _repository = repository;
+               _registry         = registry;
+               _prototypeContext  = prototypeContext;
+               _repository       = repository;
           }
 
+          // ──────────────────────────────────────────────────────────────
+          // POST /api/product/create-from-prototype
+          // Prototype Pattern: cloneaza un prototip si salveaza in InMemory DB
+          // ──────────────────────────────────────────────────────────────
           [HttpPost("create-from-prototype")]
-          public async Task<ActionResult<ProductResponse>> Create(ProductRequest request)
+          public async Task<ActionResult<ProductResponse>> CreateFromPrototype(ProductRequest request)
           {
-               // 1. Regăsim prototipul din Registru
                var prototype = _registry.GetById(request.PrototypeType.ToLower());
-               if (prototype == null) return NotFound("Prototipul nu există.");
+               if (prototype == null)
+                    return NotFound("Prototipul nu exista.");
 
-               // 2. CLONĂM (Pattern Prototype în acțiune)
-               var newProductClone = prototype.Clone();
+               var clone = prototype.Clone();
+               var data  = clone.Data;
 
-               // 3. Aplicăm personalizările din DTO peste clonă
-               var data = newProductClone.Data;
-               if (!string.IsNullOrEmpty(request.CustomName)) data.Name = request.CustomName;
-               if (request.OverriddenPrice.HasValue) data.Price = request.OverriddenPrice.Value;
+               if (!string.IsNullOrEmpty(request.CustomName))   data.Name  = request.CustomName;
+               if (request.OverriddenPrice.HasValue)             data.Price = request.OverriddenPrice.Value;
 
-               // 4. Salvare în baza de date
-               _context.Products.Add(data);
-               await _context.SaveChangesAsync();
+               _prototypeContext.Products.Add(data);
+               await _prototypeContext.SaveChangesAsync();
 
-               // 5. Mapare către Response DTO
-               var response = new ProductResponse
+               return Ok(new ProductResponse
                {
-                    Id = data.Id,
-                    Name = data.Name,
-                    Price = data.Price,
-                    Description = data.Description,
+                    Id           = data.Id,
+                    Name         = data.Name,
+                    Price        = data.Price,
+                    Description  = data.Description,
                     CategoryInfo = data.Weight > 0 ? $"{data.Weight} kg" : data.EnergyClass
-               };
-
-               return Ok(response);
-          }
-
-         
-          [HttpGet("kit/{id}")]
-          public IActionResult GetKitDetails(int id)
-          {
-               // 1. Simulăm extragerea din DB a produselor
-               var ciocan = new IndividualProduct(new ProductPrototypeData
-               { Id = 101, Name = "Ciocan Dulgher", Price = 85.5, Weight = 0.8 });
-
-               var cuie = new IndividualProduct(new ProductPrototypeData
-               { Id = 102, Name = "Set Cuie 100buc", Price = 20.0, Weight = 0.2 });
-
-               // 2. Construim Kitul
-               var kitReparatii = new ProductKit("Kit Reparații Acoperiș");
-               kitReparatii.Add(ciocan);
-               kitReparatii.Add(cuie);
-
-               // 3. Putem adăuga chiar și un sub-kit
-               var kitProtectie = new ProductKit("Set Protecție");
-               kitProtectie.Add(new IndividualProduct(new ProductPrototypeData { Name = "Mănuși", Price = 15 }));
-
-               kitReparatii.Add(kitProtectie);
-
-               // 4. Returnăm un obiect care conține totul
-               return Ok(new
-               {
-                    Id = id,
-                    NumeKit = kitReparatii.Name,
-                    PretTotal = kitReparatii.GetPrice(), // Calculat recursiv
-                    Continut = kitReparatii.GetAllChildren() // Returnează lista de Componente
                });
           }
 
+          // ──────────────────────────────────────────────────────────────
+          // GET /api/product
+          // Proxy Pattern: toate produsele din SQL Server (cache → DB)
+          // ──────────────────────────────────────────────────────────────
           [HttpGet]
-          public async Task<ActionResult<IEnumerable<ProductPrototypeData>>> GetAll()
+          public async Task<ActionResult<IEnumerable<ProductDbTable>>> GetAll()
           {
                var products = await _repository.GetAllAsync();
                return Ok(products);
           }
 
-          [HttpGet("{id}")]
-          public async Task<ActionResult<ProductPrototypeData>> GetById(int id)
+          // ──────────────────────────────────────────────────────────────
+          // GET /api/product/{id}
+          // Proxy Pattern: produs dupa ID (cache → DB)
+          // ──────────────────────────────────────────────────────────────
+          [HttpGet("{id:int}")]
+          public async Task<ActionResult<ProductDbTable>> GetById(int id)
           {
                var product = await _repository.GetByIdAsync(id);
 
                if (product == null)
-               {
-                    return NotFound(new { Message = $"Produsul cu ID {id} nu a fost găsit." });
-               }
+                    return NotFound(new { Message = $"Produsul cu ID {id} nu a fost gasit." });
 
                return Ok(product);
           }
-     
 
-}
+          // ──────────────────────────────────────────────────────────────
+          // GET /api/product/category/{category}
+          // Proxy Pattern: produse filtrate dupa categorie (cache → DB)
+          // ──────────────────────────────────────────────────────────────
+          [HttpGet("category/{category}")]
+          public async Task<ActionResult<IEnumerable<ProductDbTable>>> GetByCategory(string category)
+          {
+               var products = await _repository.GetByCategoryAsync(category);
+               return Ok(products);
+          }
+
+          // ──────────────────────────────────────────────────────────────
+          // DELETE /api/product/cache
+          // Invalideaza tot cache-ul de produse (toate request-urile afectate)
+          // ──────────────────────────────────────────────────────────────
+          [HttpDelete("cache")]
+          public IActionResult InvalidateCache()
+          {
+               ProductRemoteProxy.InvalidateAll();
+               return Ok(new { Message = "Cache-ul de produse a fost invalidat. Urmatorul request va incarca din SQL Server." });
+          }
+
+          // ──────────────────────────────────────────────────────────────
+          // DELETE /api/product/{id}/cache
+          // Invalideaza cache-ul pentru un produs specific
+          // ──────────────────────────────────────────────────────────────
+          [HttpDelete("{id:int}/cache")]
+          public IActionResult InvalidateProductCache(int id)
+          {
+               if (_repository is ProductRemoteProxy proxy)
+               {
+                    proxy.InvalidateProduct(id);
+                    return Ok(new { Message = $"Cache-ul pentru produsul ID={id} a fost invalidat." });
+               }
+
+               return Ok(new { Message = "Proxy cache nu este activ." });
+          }
+     }
 }

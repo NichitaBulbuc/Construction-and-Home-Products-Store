@@ -84,5 +84,18 @@ namespace CH_Store.Application.DbRepo
                     .OrderByDescending(o => o.OrderDate)
                     .ToListAsync();
           }
+
+          /// <inheritdoc/>
+          public async Task<bool> UpdateStatusAsync(int orderId, string newStatus)
+          {
+               var entity = await _db.Orders.FindAsync(orderId);
+
+               if (entity == null)
+                    return false;
+
+               entity.Status = newStatus;
+               await _db.SaveChangesAsync();
+               return true;
+          }
      }
 }

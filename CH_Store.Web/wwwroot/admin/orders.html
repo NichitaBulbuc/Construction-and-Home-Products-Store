@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Comenzi Admin — CH Store</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+
+<header class="navbar">
+  <a href="../index.html" class="brand">
+    <span class="brand-logo">CH</span>
+    <span class="brand-name">Admin Panel</span>
+  </a>
+  <nav><a href="../index.html">🏠 Site</a></nav>
+</header>
+
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <div class="sidebar-section">Dashboard</div>
+    <a href="index.html"><span class="nav-icon">📊</span> Dashboard</a>
+    <div class="sidebar-section">Catalog</div>
+    <a href="products.html"><span class="nav-icon">📦</span> Produse</a>
+    <div class="sidebar-section">Operații</div>
+    <a href="orders.html" class="active"><span class="nav-icon">🧾</span> Comenzi</a>
+    <a href="users.html"><span class="nav-icon">👥</span> Utilizatori</a>
+  </aside>
+
+  <main class="admin-main">
+    <div class="page-header flex-between">
+      <div>
+        <h1>🧾 Comenzi</h1>
+        <p>Gestionează și procesează comenzile</p>
+      </div>
+      <div style="display:flex;gap:.5rem">
+        <button class="btn btn-warning btn-sm" id="pending-btn" onclick="togglePending()" style="background:var(--warning);color:#fff;border-color:var(--warning)">
+          ⏳ PendingApproval <span id="pending-badge" class="cart-badge">0</span>
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="loadOrders()">🔄</button>
+      </div>
+    </div>
+
+    <!-- Pending Approval Section -->
+    <div class="d-none" id="pending-section">
+      <div class="card mb-3" style="border-left:4px solid var(--primary)">
+        <div class="card-header flex-between">
+          <span>⏳ Comenzi în așteptare de aprobare</span>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('pending-section').classList.add('d-none')">×</button>
+        </div>
+        <div class="card-body" style="padding:0" id="pending-table">
+          <div class="loading-block"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+      <select class="form-control" id="f-status" onchange="applyFilters()">
+        <option value="">Toate statusurile</option>
+        <option>New</option><option>Processing</option><option>Shipped</option>
+        <option>Delivered</option><option>Cancelled</option><option>PendingApproval</option>
+      </select>
+      <input type="date" class="form-control" id="f-from" onchange="applyFilters()" placeholder="De la">
+      <input type="date" class="form-control" id="f-to" onchange="applyFilters()" placeholder="Până la">
+      <input type="number" class="form-control" id="f-user" placeholder="User ID" style="max-width:110px" onchange="applyFilters()">
+      <button class="btn btn-ghost btn-sm" onclick="resetFilters()">✕ Reset</button>
+      <span class="text-muted" style="font-size:.8rem;margin-left:auto" id="count-label"></span>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap" id="orders-table">
+      <div class="loading-block"><div class="spinner"></div></div>
+    </div>
+    <div id="pagination"></div>
+  </main>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-overlay d-none" id="detail-modal">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <h3 id="detail-title">Detalii comandă</h3>
+      <button class="modal-close" onclick="closeModal('detail-modal')">×</button>
+    </div>
+    <div class="modal-body" id="detail-body"></div>
+    <div class="modal-footer" id="detail-footer"></div>
+  </div>
+</div>
+
+<!-- Approve Modal -->
+<div class="modal-overlay d-none" id="approve-modal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <h3>✅ Aprobă comanda <span id="approve-id"></span></h3>
+      <button class="modal-close" onclick="closeModal('approve-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Note admin (opțional)</label>
+        <textarea class="form-control" id="a-notes" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Procesează plata acum (opțional)</label>
+        <select class="form-control" id="a-payment">
+          <option value="">— Fără procesare plată (confirmare manuală) —</option>
+          <option value="0">💳 Card</option>
+          <option value="1">📱 E-Wallet</option>
+          <option value="2">🏦 Transfer bancar</option>
+          <option value="3">💵 Ramburs</option>
+          <option value="4">⚡ Stripe</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Contact client (notificare)</label>
+          <input type="text" class="form-control" id="a-contact" placeholder="email / telefon">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nume client</label>
+          <input type="text" class="form-control" id="a-name">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('approve-modal')">Anulează</button>
+      <button class="btn btn-success" onclick="submitApprove()">✅ Aprobă</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reject Modal -->
+<div class="modal-overlay d-none" id="reject-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h3>❌ Respinge comanda <span id="reject-id"></span></h3>
+      <button class="modal-close" onclick="closeModal('reject-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Motiv respingere *</label>
+        <textarea class="form-control" id="r-reason" rows="3" placeholder="Descrieți motivul respingerii..."></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Contact client</label>
+          <input type="text" class="form-control" id="r-contact">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nume client</label>
+          <input type="text" class="form-control" id="r-name">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('reject-modal')">Anulează</button>
+      <button class="btn btn-danger" onclick="submitReject()">❌ Respinge</button>
+    </div>
+  </div>
+</div>
+
+<!-- Force Status Modal -->
+<div class="modal-overlay d-none" id="status-modal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <h3>🔧 Forțează status <span id="fstatus-id"></span></h3>
+      <button class="modal-close" onclick="closeModal('status-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Status nou</label>
+        <select class="form-control" id="new-status">
+          <option>New</option><option>Processing</option><option>Shipped</option>
+          <option>Delivered</option><option>Cancelled</option><option>PendingApproval</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Contact (notificare)</label>
+          <input type="text" class="form-control" id="fs-contact">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nume</label>
+          <input type="text" class="form-control" id="fs-name">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('status-modal')">Anulează</button>
+      <button class="btn btn-primary" onclick="submitStatus()">💾 Aplică</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="../js/api.js"></script>
+<script>
+let currentPage = 1;
+let currentOrderId = null;
+let pendingVisible = false;
+
+async function loadOrders(page = 1) {
+  currentPage = page;
+  const el = document.getElementById('orders-table');
+  el.innerHTML = '<div class="loading-block"><div class="spinner"></div></div>';
+  try {
+    const params = { page, pageSize: 15 };
+    const status = document.getElementById('f-status').value;
+    const from   = document.getElementById('f-from').value;
+    const to     = document.getElementById('f-to').value;
+    const userId = document.getElementById('f-user').value;
+    if (status) params.status = status;
+    if (from) params.dateFrom = from;
+    if (to) params.dateTo = to;
+    if (userId) params.userId = userId;
+
+    const result = await API.adminOrders.getAll(params);
+    document.getElementById('count-label').textContent = `${result.totalCount} comenzi (pagina ${result.page}/${result.totalPages})`;
+    renderTable(result.items || []);
+    renderPagination(result);
+    loadPendingCount();
+  } catch(e) {
+    el.innerHTML = '<p class="text-muted p-3">Eroare la încărcarea comenzilor.</p>';
+  }
+}
+
+function renderTable(list) {
+  if (!list.length) {
+    document.getElementById('orders-table').innerHTML = '<div class="empty-state"><div class="empty-icon">🧾</div><h3>Nicio comandă</h3></div>';
+    return;
+  }
+  document.getElementById('orders-table').innerHTML = `
+    <table>
+      <thead><tr><th>ID</th><th>Client</th><th>Data</th><th>Total</th><th>Status</th><th>Livrare</th><th>Acțiuni</th></tr></thead>
+      <tbody>${list.map(o => `
+        <tr>
+          <td class="fw-600">#${o.id}</td>
+          <td>User #${o.userId}<br><span class="text-muted" style="font-size:.75rem">${escHtml(o.username||'—')}</span></td>
+          <td style="font-size:.8rem">${fmtDate(o.orderDate)}</td>
+          <td class="fw-bold text-primary">${formatPrice(o.totalAmount)}</td>
+          <td>${statusBadge(o.status)}</td>
+          <td><span class="badge badge-muted">${escHtml(o.deliveryType||'Standard')}</span></td>
+          <td>
+            <div style="display:flex;gap:.3rem;flex-wrap:nowrap">
+              <button class="btn btn-ghost btn-sm" onclick="viewDetail(${o.id})" title="Detalii">👁</button>
+              ${o.status==='PendingApproval'?`<button class="btn btn-success btn-sm" onclick="openApprove(${o.id})" title="Aprobă">✅</button><button class="btn btn-danger btn-sm" onclick="openReject(${o.id})" title="Respinge">❌</button>`:''}
+              <button class="btn btn-ghost btn-sm" onclick="openForceStatus(${o.id})" title="Schimbă status">🔧</button>
+            </div>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderPagination(result) {
+  const el = document.getElementById('pagination');
+  if (result.totalPages <= 1) { el.innerHTML = ''; return; }
+  const pages = [];
+  for (let i = 1; i <= result.totalPages; i++) {
+    pages.push(`<div class="page-btn ${i===result.page?'active':''}" onclick="loadOrders(${i})">${i}</div>`);
+  }
+  el.innerHTML = `<div class="pagination mt-2">${pages.join('')}</div>`;
+}
+
+async function loadPendingCount() {
+  try {
+    const pending = await API.adminOrders.pending();
+    document.getElementById('pending-badge').textContent = pending?.length || 0;
+  } catch{}
+}
+
+async function togglePending() {
+  const section = document.getElementById('pending-section');
+  pendingVisible = !pendingVisible;
+  if (pendingVisible) {
+    section.classList.remove('d-none');
+    await loadPendingTable();
+  } else {
+    section.classList.add('d-none');
+  }
+}
+
+async function loadPendingTable() {
+  const el = document.getElementById('pending-table');
+  try {
+    const list = await API.adminOrders.pending();
+    if (!list?.length) { el.innerHTML = '<p class="text-success p-3">✅ Nicio comandă în așteptare.</p>'; return; }
+    el.innerHTML = `<table><thead><tr><th>ID</th><th>Client</th><th>Total</th><th>Data</th><th>Acțiuni</th></tr></thead>
+      <tbody>${list.map(o => `
+        <tr>
+          <td class="fw-600">#${o.id}</td>
+          <td>User #${o.userId} ${o.username?`(${escHtml(o.username)})`:''}
+          <td class="fw-bold text-primary">${formatPrice(o.totalAmount)}</td>
+          <td style="font-size:.8rem">${fmtDate(o.orderDate)}</td>
+          <td style="display:flex;gap:.4rem">
+            <button class="btn btn-success btn-sm" onclick="openApprove(${o.id})">✅ Aprobă</button>
+            <button class="btn btn-danger btn-sm" onclick="openReject(${o.id})">❌ Respinge</button>
+          </td>
+        </tr>`).join('')}</tbody></table>`;
+  } catch(e) { el.innerHTML = '<p class="text-muted p-3">Eroare.</p>'; }
+}
+
+async function viewDetail(id) {
+  currentOrderId = id;
+  document.getElementById('detail-title').textContent = `Comandă #${id}`;
+  openModal('detail-modal');
+  document.getElementById('detail-body').innerHTML = '<div class="loading-block"><div class="spinner"></div></div>';
+  try {
+    const o = await API.adminOrders.getById(id);
+    document.getElementById('detail-body').innerHTML = `
+      <div class="grid-2 mb-3" style="gap:.75rem">
+        <div><span class="text-muted">Status</span><br>${statusBadge(o.status)}</div>
+        <div><span class="text-muted">Total</span><br><span class="fw-bold text-primary">${formatPrice(o.totalAmount)}</span></div>
+        <div><span class="text-muted">Client</span><br><span>User #${o.userId}${o.user?` — ${escHtml(o.user.username)}`:''}</span></div>
+        <div><span class="text-muted">Data</span><br>${fmtDate(o.orderDate)}</div>
+        <div><span class="text-muted">Adresă livrare</span><br>${escHtml(o.shippingAddress||'—')}</div>
+        <div><span class="text-muted">Tip livrare</span><br><span class="badge badge-muted">${o.deliveryType}</span> + ${formatPrice(o.deliveryCost)}</div>
+        ${o.notes?`<div style="grid-column:1/-1"><span class="text-muted">Note</span><br><small>${escHtml(o.notes)}</small></div>`:''}
+      </div>
+      <h4 class="mb-2">Produse comandate</h4>
+      <div class="table-wrap">
+        <table><thead><tr><th>Produs</th><th>Cantitate</th><th>Preț unit.</th><th>Subtotal</th></tr></thead>
+        <tbody>${(o.items||[]).map(i=>`
+          <tr>
+            <td>${escHtml(i.productName)}</td>
+            <td>${i.quantity}</td>
+            <td>${formatPrice(i.unitPrice)}</td>
+            <td class="fw-bold">${formatPrice(i.unitPrice*i.quantity)}</td>
+          </tr>`).join('')}</tbody></table>
+      </div>`;
+    document.getElementById('detail-footer').innerHTML = `
+      <button class="btn btn-ghost" onclick="closeModal('detail-modal')">Închide</button>
+      ${o.status==='PendingApproval'?`<button class="btn btn-success" onclick="closeModal('detail-modal');openApprove(${id})">✅ Aprobă</button><button class="btn btn-danger" onclick="closeModal('detail-modal');openReject(${id})">❌ Respinge</button>`:''}
+      <button class="btn btn-ghost" onclick="closeModal('detail-modal');openForceStatus(${id})">🔧 Status</button>`;
+  } catch(e) {
+    document.getElementById('detail-body').innerHTML = '<p class="text-muted">Eroare la încărcarea detaliilor.</p>';
+  }
+}
+
+function openApprove(id) {
+  currentOrderId = id;
+  document.getElementById('approve-id').textContent = `#${id}`;
+  ['a-notes','a-contact','a-name'].forEach(f => document.getElementById(f).value = '');
+  document.getElementById('a-payment').value = '';
+  openModal('approve-modal');
+}
+
+async function submitApprove() {
+  try {
+    const payVal = document.getElementById('a-payment').value;
+    const body = {
+      notes: document.getElementById('a-notes').value,
+      recipientContact: document.getElementById('a-contact').value,
+      recipientName: document.getElementById('a-name').value,
+      notificationChannel: 'email',
+      processPaymentWith: payVal !== '' ? parseInt(payVal) : null
+    };
+    const result = await API.adminOrders.approve(currentOrderId, body);
+    showToast(result.message || 'Comandă aprobată!', 'success');
+    closeModal('approve-modal');
+    loadOrders(currentPage);
+    if (pendingVisible) loadPendingTable();
+  } catch(e) {
+    showToast(e?.data?.message || 'Eroare la aprobare.', 'error');
+  }
+}
+
+function openReject(id) {
+  currentOrderId = id;
+  document.getElementById('reject-id').textContent = `#${id}`;
+  ['r-reason','r-contact','r-name'].forEach(f => document.getElementById(f).value = '');
+  openModal('reject-modal');
+}
+
+async function submitReject() {
+  const reason = document.getElementById('r-reason').value.trim();
+  if (!reason) { showToast('Introduceți motivul respingerii.', 'warning'); return; }
+  try {
+    const result = await API.adminOrders.reject(currentOrderId, {
+      reason,
+      recipientContact: document.getElementById('r-contact').value,
+      recipientName: document.getElementById('r-name').value,
+      notificationChannel: 'email'
+    });
+    showToast(result.message || 'Comandă respinsă.', 'info');
+    closeModal('reject-modal');
+    loadOrders(currentPage);
+    if (pendingVisible) loadPendingTable();
+  } catch(e) { showToast(e?.data?.message || 'Eroare.', 'error'); }
+}
+
+function openForceStatus(id) {
+  currentOrderId = id;
+  document.getElementById('fstatus-id').textContent = `#${id}`;
+  ['fs-contact','fs-name'].forEach(f => document.getElementById(f).value = '');
+  openModal('status-modal');
+}
+
+async function submitStatus() {
+  const newStatus = document.getElementById('new-status').value;
+  try {
+    const result = await API.adminOrders.forceStatus(currentOrderId, {
+      newStatus,
+      recipientContact: document.getElementById('fs-contact').value,
+      recipientName: document.getElementById('fs-name').value,
+      notificationChannel: 'email'
+    });
+    showToast(result.message || 'Status actualizat!', 'success');
+    closeModal('status-modal');
+    loadOrders(currentPage);
+  } catch(e) { showToast(e?.data?.message || 'Eroare.', 'error'); }
+}
+
+function applyFilters() { loadOrders(1); }
+function resetFilters() {
+  ['f-status','f-from','f-to','f-user'].forEach(id => document.getElementById(id).value = '');
+  loadOrders(1);
+}
+
+loadOrders();
+</script>
+</body>
+</html>

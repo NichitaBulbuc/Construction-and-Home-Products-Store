@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coș de cumpărături — CH Store</title>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+<header class="navbar">
+  <a href="index.html" class="brand">
+    <span class="brand-logo">CH</span>
+    <span class="brand-name">Construction Store</span>
+  </a>
+  <nav>
+    <a href="index.html">Acasă</a>
+    <a href="products.html">Produse</a>
+    <a href="cart.html" class="cart-btn">🛒 Coș <span class="cart-badge" id="cart-count">0</span></a>
+  </nav>
+</header>
+
+<div class="container section">
+
+  <div class="page-header flex-between">
+    <div>
+      <h1>🛒 Coșul meu</h1>
+      <p>Verifică produsele și continuă cu comanda</p>
+    </div>
+    <div style="display:flex;gap:.5rem;align-items:center">
+      <span class="text-muted" style="font-size:.8rem">User ID:</span>
+      <input type="number" id="user-id-input" class="form-control" style="width:80px" value="1" onchange="changeUser()">
+      <button class="btn btn-ghost btn-sm" onclick="undoLast()" title="Anulează ultima acțiune">↩ Undo</button>
+      <button class="btn btn-danger btn-sm" onclick="clearCart()">🗑 Golește</button>
+    </div>
+  </div>
+
+  <div id="cart-content">
+    <div class="loading-block"><div class="spinner"></div></div>
+  </div>
+
+</div>
+
+<div id="toast-container"></div>
+
+<script src="js/api.js"></script>
+<script>
+document.getElementById('user-id-input').value = getUserId();
+
+function changeUser() {
+  setUserId(document.getElementById('user-id-input').value);
+  loadCart();
+}
+
+async function loadCart() {
+  const content = document.getElementById('cart-content');
+  content.innerHTML = '<div class="loading-block"><div class="spinner"></div></div>';
+  try {
+    const cart = await API.cart.get(getUserId());
+    const badge = document.getElementById('cart-count');
+    if (badge) badge.textContent = cart?.lineCount || 0;
+    renderCart(cart);
+  } catch(e) {
+    content.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><h3>Nu s-a putut încărca coșul</h3><p>Verificați că API-ul rulează.</p></div>';
+  }
+}
+
+function renderCart(cart) {
+  const content = document.getElementById('cart-content');
+  if (!cart || cart.isEmpty || !cart.items?.length) {
+    content.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">🛒</div>
+      <h3>Coșul este gol</h3>
+      <p>Adaugă produse din catalog pentru a continua.</p>
+      <a href="products.html" class="btn btn-primary mt-3">🔍 Explorează produse</a>
+    </div>`;
+    return;
+  }
+
+  content.innerHTML = `
+  <div style="display:grid;grid-template-columns:1fr 340px;gap:2rem;align-items:start">
+    <div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Produs</th>
+              <th>Preț unitar</th>
+              <th>Cantitate</th>
+              <th>Subtotal</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="cart-tbody">
+            ${cart.items.map(item => `
+            <tr id="row-${item.productId}">
+              <td>
+                <div class="fw-600">${escHtml(item.productName)}</div>
+                <div class="text-muted" style="font-size:.78rem">ID: ${item.productId}</div>
+              </td>
+              <td>${formatPrice(item.price)}</td>
+              <td>
+                <div class="cart-qty">
+                  <button class="btn btn-ghost btn-sm" onclick="updateQty(${item.productId}, ${item.quantity - 1})">−</button>
+                  <input type="number" class="form-control" value="${item.quantity}" min="0"
+                    onchange="updateQty(${item.productId}, this.value)" style="width:60px;text-align:center">
+                  <button class="btn btn-ghost btn-sm" onclick="updateQty(${item.productId}, ${item.quantity + 1})">+</button>
+                </div>
+              </td>
+              <td class="fw-bold text-primary">${formatPrice(item.subtotal)}</td>
+              <td>
+                <button class="btn btn-danger btn-sm" onclick="removeItem(${item.productId})">🗑</button>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="mt-2 flex gap-2">
+        <button class="btn btn-ghost btn-sm" onclick="undoLast()">↩ Undo ultima acțiune</button>
+        <a href="products.html" class="btn btn-ghost btn-sm">+ Adaugă produse</a>
+      </div>
+    </div>
+    <div class="cart-total-box">
+      <h3 class="mb-3">Sumar comandă</h3>
+      <div class="total-row">
+        <span>Subtotal (${cart.itemCount} buc.)</span>
+        <span>${formatPrice(cart.total)}</span>
+      </div>
+      <div class="total-row">
+        <span class="text-muted">Livrare</span>
+        <span class="text-muted">Calculat la checkout</span>
+      </div>
+      <div class="total-row grand">
+        <span>Total estimat</span>
+        <span class="text-primary">${formatPrice(cart.total)}</span>
+      </div>
+      <a href="checkout.html" class="btn btn-primary w-100 mt-3 btn-lg">
+        ✅ Finalizează comanda
+      </a>
+      <a href="products.html" class="btn btn-ghost w-100 mt-2">← Continuă cumpărăturile</a>
+      <div class="mt-3" style="font-size:.78rem;color:var(--muted);text-align:center">
+        🔒 Plată securizată · Garanție returnare 30 zile
+      </div>
+    </div>
+  </div>
+  <div class="mt-3">
+    <details>
+      <summary style="cursor:pointer;font-size:.875rem;color:var(--muted)">📋 Istoric operații coș (${cart.undoDepth || 0} disponibile pentru undo)</summary>
+      <div id="history-list" class="mt-2"></div>
+    </details>
+  </div>`;
+
+  loadHistory();
+}
+
+async function updateQty(productId, qty) {
+  qty = parseInt(qty);
+  try {
+    await API.cart.updateItem(getUserId(), productId, { quantity: qty });
+    await loadCart();
+  } catch(e) { showToast('Eroare la actualizarea cantității.', 'error'); }
+}
+
+async function removeItem(productId) {
+  try {
+    await API.cart.removeItem(getUserId(), productId);
+    showToast('Produs eliminat din coș.', 'info');
+    await loadCart();
+  } catch(e) { showToast('Eroare la eliminare.', 'error'); }
+}
+
+async function clearCart() {
+  if (!confirmDialog('Golești tot coșul?')) return;
+  try {
+    await API.cart.clear(getUserId());
+    showToast('Coșul a fost golit.', 'info');
+    await loadCart();
+  } catch(e) { showToast('Eroare.', 'error'); }
+}
+
+async function undoLast() {
+  try {
+    const result = await API.cart.undo(getUserId());
+    showToast(result?.message || 'Acțiune anulată!', 'success');
+    await loadCart();
+  } catch(e) {
+    const msg = e?.data?.message || 'Nimic de anulat.';
+    showToast(msg, 'warning');
+  }
+}
+
+async function loadHistory() {
+  const el = document.getElementById('history-list');
+  if (!el) return;
+  try {
+    const history = await API.cart.history(getUserId());
+    if (!history?.length) { el.innerHTML = '<p class="text-muted" style="font-size:.8rem">Niciun istoric disponibil.</p>'; return; }
+    el.innerHTML = `<div class="table-wrap" style="max-height:200px;overflow-y:auto">
+      <table><thead><tr><th>#</th><th>Operație</th><th>Descriere</th><th>La</th><th>Status</th></tr></thead>
+      <tbody>${history.map(h => `
+        <tr><td>${h.index}</td><td>${escHtml(h.commandName)}</td><td>${escHtml(h.description)}</td>
+        <td>${fmtDate(h.occurredAt)}</td>
+        <td><span class="badge ${h.wasUndone?'badge-muted':'badge-success'}">${h.wasUndone?'Anulat':'Executat'}</span></td></tr>
+      `).join('')}</tbody></table></div>`;
+  } catch{}
+}
+
+loadCart();
+</script>
+</body>
+</html>

@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Produse Admin — CH Store</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+
+<header class="navbar">
+  <a href="../index.html" class="brand">
+    <span class="brand-logo">CH</span>
+    <span class="brand-name">Admin Panel</span>
+  </a>
+  <nav>
+    <a href="../index.html">🏠 Site</a>
+  </nav>
+</header>
+
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <div class="sidebar-section">Dashboard</div>
+    <a href="index.html"><span class="nav-icon">📊</span> Dashboard</a>
+    <div class="sidebar-section">Catalog</div>
+    <a href="products.html" class="active"><span class="nav-icon">📦</span> Produse</a>
+    <div class="sidebar-section">Operații</div>
+    <a href="orders.html"><span class="nav-icon">🧾</span> Comenzi</a>
+    <a href="users.html"><span class="nav-icon">👥</span> Utilizatori</a>
+  </aside>
+
+  <main class="admin-main">
+    <div class="page-header flex-between">
+      <div>
+        <h1>📦 Produse</h1>
+        <p>Gestionează catalogul de produse</p>
+      </div>
+      <div style="display:flex;gap:.5rem">
+        <button class="btn btn-ghost btn-sm" onclick="loadLowStock()">⚠️ Stoc scăzut</button>
+        <button class="btn btn-primary" onclick="openAddModal()">+ Adaugă produs</button>
+      </div>
+    </div>
+
+    <!-- Low Stock Alerts -->
+    <div class="d-none" id="low-stock-section">
+      <div class="card mb-3" style="border-left:4px solid var(--warning)">
+        <div class="card-header flex-between">
+          <span>⚠️ Alerte stoc scăzut</span>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('low-stock-section').classList.add('d-none')">×</button>
+        </div>
+        <div class="card-body" style="padding:0" id="low-stock-table"></div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+      <input type="text" class="form-control" id="search" placeholder="🔍 Caută după nume..." oninput="filterProducts()">
+      <select class="form-control" id="cat-filter" onchange="filterProducts()">
+        <option value="">Toate categoriile</option>
+      </select>
+      <span class="text-muted" style="font-size:.8rem;margin-left:auto" id="count-label"></span>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap" id="products-table">
+      <div class="loading-block"><div class="spinner"></div></div>
+    </div>
+  </main>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-overlay d-none" id="product-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">Adaugă produs</h3>
+      <button class="modal-close" onclick="closeModal('product-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Nume *</label>
+          <input type="text" class="form-control" id="f-name" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Categorie *</label>
+          <input type="text" class="form-control" id="f-category" placeholder="ex: Construcții">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descriere</label>
+        <textarea class="form-control" id="f-desc"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Preț (MDL) *</label>
+          <input type="number" class="form-control" id="f-price" step="0.01" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Stoc (buc.) *</label>
+          <input type="number" class="form-control" id="f-stock" min="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Greutate (kg)</label>
+          <input type="number" class="form-control" id="f-weight" step="0.01" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Clasă energetică</label>
+          <input type="text" class="form-control" id="f-energy" placeholder="A++, A+, A...">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('product-modal')">Anulează</button>
+      <button class="btn btn-primary" onclick="saveProduct()" id="save-btn">💾 Salvează</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stock Modal -->
+<div class="modal-overlay d-none" id="stock-modal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <h3>📦 Actualizare stoc</h3>
+      <button class="modal-close" onclick="closeModal('stock-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <p id="stock-product-name" class="fw-600 mb-3"></p>
+      <div class="form-group">
+        <label class="form-label">Stoc nou (cantitate absolută)</label>
+        <input type="number" class="form-control" id="new-stock" min="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Motiv ajustare</label>
+        <input type="text" class="form-control" id="stock-reason" placeholder="Recepție marfă, inventar...">
+      </div>
+      <input type="hidden" id="stock-product-id">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('stock-modal')">Anulează</button>
+      <button class="btn btn-primary" onclick="saveStock()">💾 Actualizează</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="../js/api.js"></script>
+<script>
+let allProducts = [];
+
+async function loadProducts() {
+  const el = document.getElementById('products-table');
+  try {
+    allProducts = await API.adminProducts.getAll() || [];
+    const cats = [...new Set(allProducts.map(p => p.category).filter(Boolean))].sort();
+    const sel = document.getElementById('cat-filter');
+    sel.innerHTML = '<option value="">Toate categoriile</option>' + cats.map(c => `<option>${c}</option>`).join('');
+    renderTable(allProducts);
+  } catch(e) {
+    el.innerHTML = '<p class="text-muted p-3">Eroare la încărcarea produselor.</p>';
+  }
+}
+
+function renderTable(list) {
+  document.getElementById('count-label').textContent = `${list.length} produs${list.length!==1?'e':''}`;
+  if (!list.length) {
+    document.getElementById('products-table').innerHTML = '<div class="empty-state"><div class="empty-icon">📦</div><h3>Niciun produs</h3></div>';
+    return;
+  }
+  document.getElementById('products-table').innerHTML = `
+    <table>
+      <thead><tr><th>ID</th><th>Nume</th><th>Categorie</th><th>Preț</th><th>Stoc</th><th>Status</th><th>Acțiuni</th></tr></thead>
+      <tbody>${list.map(p => `
+        <tr>
+          <td class="text-muted">#${p.id}</td>
+          <td><div class="fw-600">${escHtml(p.name)}</div><div class="text-muted" style="font-size:.75rem">${escHtml(p.description||'').slice(0,60)}${p.description?.length>60?'…':''}</div></td>
+          <td><span class="badge badge-muted">${escHtml(p.category||'—')}</span></td>
+          <td class="fw-bold text-primary">${formatPrice(p.price)}</td>
+          <td>
+            <span class="${p.stockQuantity===0?'text-danger fw-bold':p.stockQuantity<=10?'text-warning fw-600':'text-success'}">${p.stockQuantity}</span>
+            ${p.stockQuantity===0?'<span class="badge badge-danger ml-1">Epuizat</span>':p.stockQuantity<=10?'<span class="badge badge-warning">Scăzut</span>':''}
+          </td>
+          <td>${p.stockQuantity>0?'<span class="badge badge-success">Activ</span>':'<span class="badge badge-danger">Indisponibil</span>'}</td>
+          <td>
+            <div style="display:flex;gap:.4rem">
+              <button class="btn btn-ghost btn-sm" onclick="openEditModal(${p.id})" title="Editează">✏️</button>
+              <button class="btn btn-ghost btn-sm" onclick="openStockModal(${p.id},'${escHtml(p.name)}')" title="Stoc">📦</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteProduct(${p.id},'${escHtml(p.name)}')" title="Șterge">🗑</button>
+            </div>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function filterProducts() {
+  const s = document.getElementById('search').value.toLowerCase();
+  const cat = document.getElementById('cat-filter').value;
+  renderTable(allProducts.filter(p =>
+    (!s || p.name.toLowerCase().includes(s)) && (!cat || p.category === cat)
+  ));
+}
+
+function openAddModal() {
+  document.getElementById('modal-title').textContent = 'Adaugă produs';
+  document.getElementById('edit-id').value = '';
+  ['f-name','f-category','f-desc','f-energy','f-stock','f-weight','f-price'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  openModal('product-modal');
+}
+
+async function openEditModal(id) {
+  const p = allProducts.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('modal-title').textContent = 'Editează produs';
+  document.getElementById('edit-id').value = id;
+  document.getElementById('f-name').value = p.name || '';
+  document.getElementById('f-category').value = p.category || '';
+  document.getElementById('f-desc').value = p.description || '';
+  document.getElementById('f-price').value = p.price || '';
+  document.getElementById('f-stock').value = p.stockQuantity || '';
+  document.getElementById('f-weight').value = p.weight || '';
+  document.getElementById('f-energy').value = p.energyClass || '';
+  openModal('product-modal');
+}
+
+async function saveProduct() {
+  const id = document.getElementById('edit-id').value;
+  const body = {
+    name:          document.getElementById('f-name').value.trim(),
+    category:      document.getElementById('f-category').value.trim(),
+    description:   document.getElementById('f-desc').value.trim(),
+    price:         parseFloat(document.getElementById('f-price').value) || 0,
+    stockQuantity: parseInt(document.getElementById('f-stock').value) || 0,
+    weight:        parseFloat(document.getElementById('f-weight').value) || null,
+    energyClass:   document.getElementById('f-energy').value.trim() || null,
+  };
+  if (!body.name) { showToast('Numele este obligatoriu.', 'warning'); return; }
+
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  try {
+    if (id) {
+      await API.adminProducts.update(id, body);
+      showToast('Produs actualizat!', 'success');
+    } else {
+      await API.adminProducts.create(body);
+      showToast('Produs adăugat!', 'success');
+    }
+    closeModal('product-modal');
+    loadProducts();
+  } catch(e) {
+    showToast(e?.data?.message || 'Eroare la salvare.', 'error');
+  } finally { btn.disabled = false; }
+}
+
+async function deleteProduct(id, name) {
+  if (!confirmDialog(`Ștergi produsul "${name}"?`)) return;
+  try {
+    await API.adminProducts.delete(id);
+    showToast('Produs șters.', 'info');
+    loadProducts();
+  } catch(e) {
+    showToast(e?.data?.message || 'Nu se poate șterge (comenzi active).', 'error');
+  }
+}
+
+function openStockModal(id, name) {
+  const p = allProducts.find(x => x.id === id);
+  document.getElementById('stock-product-id').value = id;
+  document.getElementById('stock-product-name').textContent = name;
+  document.getElementById('new-stock').value = p?.stockQuantity || 0;
+  document.getElementById('stock-reason').value = '';
+  openModal('stock-modal');
+}
+
+async function saveStock() {
+  const id = document.getElementById('stock-product-id').value;
+  const qty = parseInt(document.getElementById('new-stock').value);
+  const reason = document.getElementById('stock-reason').value;
+  if (isNaN(qty) || qty < 0) { showToast('Cantitate invalidă.', 'warning'); return; }
+  try {
+    await API.adminProducts.updateStock(id, { stockQuantity: qty, reason });
+    showToast('Stoc actualizat!', 'success');
+    closeModal('stock-modal');
+    loadProducts();
+  } catch(e) { showToast('Eroare.', 'error'); }
+}
+
+async function loadLowStock() {
+  const section = document.getElementById('low-stock-section');
+  section.classList.remove('d-none');
+  const el = document.getElementById('low-stock-table');
+  try {
+    const data = await API.adminProducts.lowStock(10);
+    if (!data?.length) { el.innerHTML = '<p class="text-success p-3">✅ Nicio alertă de stoc.</p>'; return; }
+    el.innerHTML = `<table><thead><tr><th>Produs</th><th>Categorie</th><th>Stoc</th><th>Preț</th><th>Severitate</th><th></th></tr></thead>
+      <tbody>${data.map(a => `
+        <tr>
+          <td class="fw-600">${escHtml(a.productName)}</td>
+          <td><span class="badge badge-muted">${escHtml(a.category||'—')}</span></td>
+          <td class="${a.stockQuantity===0?'text-danger fw-bold':'text-warning fw-600'}">${a.stockQuantity}</td>
+          <td>${formatPrice(a.price)}</td>
+          <td><span class="badge ${a.severity==='OutOfStock'?'badge-danger':'badge-warning'}">${a.severity}</span></td>
+          <td><button class="btn btn-ghost btn-sm" onclick="openStockModal(${a.productId},'${escHtml(a.productName)}')">📦 Stoc</button></td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  } catch(e) { el.innerHTML = '<p class="text-muted p-3">Eroare.</p>'; }
+}
+
+loadProducts();
+</script>
+</body>
+</html>

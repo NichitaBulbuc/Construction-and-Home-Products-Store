@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Utilizatori Admin — CH Store</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+
+<header class="navbar">
+  <a href="../index.html" class="brand">
+    <span class="brand-logo">CH</span>
+    <span class="brand-name">Admin Panel</span>
+  </a>
+  <nav><a href="../index.html">🏠 Site</a></nav>
+</header>
+
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <div class="sidebar-section">Dashboard</div>
+    <a href="index.html"><span class="nav-icon">📊</span> Dashboard</a>
+    <div class="sidebar-section">Catalog</div>
+    <a href="products.html"><span class="nav-icon">📦</span> Produse</a>
+    <div class="sidebar-section">Operații</div>
+    <a href="orders.html"><span class="nav-icon">🧾</span> Comenzi</a>
+    <a href="users.html" class="active"><span class="nav-icon">👥</span> Utilizatori</a>
+  </aside>
+
+  <main class="admin-main">
+    <div class="page-header flex-between">
+      <div>
+        <h1>👥 Utilizatori</h1>
+        <p>Gestionează conturile clienților</p>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="loadUsers()">🔄 Reîncarcă</button>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+      <input type="text" class="form-control" id="search-input" placeholder="🔍 Caută după username sau email..."
+        oninput="debounceSearch()" style="max-width:300px">
+      <select class="form-control" id="page-size" onchange="loadUsers(1)" style="max-width:120px">
+        <option value="10">10 / pag.</option>
+        <option value="20" selected>20 / pag.</option>
+        <option value="50">50 / pag.</option>
+      </select>
+      <span class="text-muted" style="font-size:.8rem;margin-left:auto" id="count-label"></span>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap" id="users-table">
+      <div class="loading-block"><div class="spinner"></div></div>
+    </div>
+    <div id="pagination"></div>
+  </main>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal-overlay d-none" id="edit-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <h3>✏️ Editează utilizator #<span id="edit-user-id"></span></h3>
+      <button class="modal-close" onclick="closeModal('edit-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Username (readonly)</label>
+        <input type="text" class="form-control" id="e-username" readonly style="background:var(--light);color:var(--muted)">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-control" id="e-email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Telefon</label>
+          <input type="text" class="form-control" id="e-phone" placeholder="+373 ...">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Adresă</label>
+        <input type="text" class="form-control" id="e-address">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nivel / Rol</label>
+        <select class="form-control" id="e-level">
+          <option value="0">0 — Client standard</option>
+          <option value="1">1 — Client VIP</option>
+          <option value="2">2 — Manager</option>
+          <option value="3">3 — Admin</option>
+        </select>
+      </div>
+      <input type="hidden" id="e-id">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('edit-modal')">Anulează</button>
+      <button class="btn btn-primary" onclick="saveUser()">💾 Salvează</button>
+    </div>
+  </div>
+</div>
+
+<!-- Orders Modal -->
+<div class="modal-overlay d-none" id="orders-modal">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header">
+      <h3>🧾 Comenzile utilizatorului #<span id="orders-user-id"></span></h3>
+      <button class="modal-close" onclick="closeModal('orders-modal')">×</button>
+    </div>
+    <div class="modal-body" style="padding:0" id="user-orders-body">
+      <div class="loading-block"><div class="spinner"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('orders-modal')">Închide</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="../js/api.js"></script>
+<script>
+let currentPage = 1;
+let searchTimer = null;
+
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => loadUsers(1), 400);
+}
+
+async function loadUsers(page = 1) {
+  currentPage = page;
+  const el = document.getElementById('users-table');
+  el.innerHTML = '<div class="loading-block"><div class="spinner"></div></div>';
+  const search = document.getElementById('search-input').value.trim();
+  const pageSize = parseInt(document.getElementById('page-size').value) || 20;
+  try {
+    const result = await API.adminUsers.getAll(page, pageSize, search || null);
+    document.getElementById('count-label').textContent = `${result.totalCount} utilizatori (pag. ${result.page}/${result.totalPages})`;
+    renderTable(result.items || []);
+    renderPagination(result);
+  } catch(e) {
+    el.innerHTML = '<p class="text-muted p-3">Eroare la încărcarea utilizatorilor.</p>';
+  }
+}
+
+function renderTable(list) {
+  if (!list.length) {
+    document.getElementById('users-table').innerHTML = '<div class="empty-state"><div class="empty-icon">👥</div><h3>Niciun utilizator găsit</h3></div>';
+    return;
+  }
+  const rolLabels = ['Client','VIP','Manager','Admin'];
+  const rolBadges = ['badge-muted','badge-primary','badge-warning','badge-danger'];
+  document.getElementById('users-table').innerHTML = `
+    <table>
+      <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Telefon</th><th>Nivel</th><th>Comenzi</th><th>Total cheltuit</th><th>Înregistrat</th><th>Acțiuni</th></tr></thead>
+      <tbody>${list.map(u => {
+        const roleIdx = Math.min(u.level, 3);
+        return `<tr>
+          <td class="text-muted">#${u.id}</td>
+          <td><div class="fw-600">👤 ${escHtml(u.username)}</div></td>
+          <td>${escHtml(u.email)}</td>
+          <td>${escHtml(u.phone||'—')}</td>
+          <td><span class="badge ${rolBadges[roleIdx]}">${rolLabels[roleIdx]}</span></td>
+          <td class="fw-600">${u.totalOrders}</td>
+          <td class="fw-bold text-primary">${formatPrice(u.totalSpent)}</td>
+          <td style="font-size:.8rem;color:var(--muted)">${fmtDate(u.registartionDateTime)}</td>
+          <td>
+            <div style="display:flex;gap:.3rem">
+              <button class="btn btn-ghost btn-sm" onclick="openEdit(${JSON.stringify(u).replace(/"/g,'&quot;')})" title="Editează">✏️</button>
+              <button class="btn btn-ghost btn-sm" onclick="viewOrders(${u.id})" title="Comenzi">🧾</button>
+            </div>
+          </td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderPagination(result) {
+  const el = document.getElementById('pagination');
+  if (result.totalPages <= 1) { el.innerHTML = ''; return; }
+  const pages = [];
+  for (let i = 1; i <= result.totalPages; i++)
+    pages.push(`<div class="page-btn ${i===result.page?'active':''}" onclick="loadUsers(${i})">${i}</div>`);
+  el.innerHTML = `<div class="pagination mt-2">${pages.join('')}</div>`;
+}
+
+function openEdit(u) {
+  if (typeof u === 'string') u = JSON.parse(u);
+  document.getElementById('e-id').value = u.id;
+  document.getElementById('edit-user-id').textContent = u.id;
+  document.getElementById('e-username').value = u.username;
+  document.getElementById('e-email').value = u.email || '';
+  document.getElementById('e-phone').value = u.phone || '';
+  document.getElementById('e-address').value = u.address || '';
+  document.getElementById('e-level').value = u.level || 0;
+  openModal('edit-modal');
+}
+
+async function saveUser() {
+  const id = document.getElementById('e-id').value;
+  const body = {
+    email:   document.getElementById('e-email').value.trim() || null,
+    phone:   document.getElementById('e-phone').value.trim() || null,
+    address: document.getElementById('e-address').value.trim() || null,
+    level:   parseInt(document.getElementById('e-level').value),
+  };
+  try {
+    await API.adminUsers.update(id, body);
+    showToast('Utilizator actualizat!', 'success');
+    closeModal('edit-modal');
+    loadUsers(currentPage);
+  } catch(e) { showToast(e?.data?.message || 'Eroare la salvare.', 'error'); }
+}
+
+async function viewOrders(userId) {
+  document.getElementById('orders-user-id').textContent = userId;
+  openModal('orders-modal');
+  const el = document.getElementById('user-orders-body');
+  el.innerHTML = '<div class="loading-block"><div class="spinner"></div></div>';
+  try {
+    const orders = await API.adminUsers.orders(userId);
+    if (!orders?.length) { el.innerHTML = '<p class="text-muted text-center p-3">Nicio comandă.</p>'; return; }
+    el.innerHTML = `<table><thead><tr><th>ID</th><th>Data</th><th>Total</th><th>Status</th><th>Livrare</th><th>Produse</th></tr></thead>
+      <tbody>${orders.map(o => `
+        <tr>
+          <td class="fw-600">#${o.id}</td>
+          <td style="font-size:.8rem">${fmtDate(o.orderDate)}</td>
+          <td class="fw-bold text-primary">${formatPrice(o.totalAmount)}</td>
+          <td>${statusBadge(o.status)}</td>
+          <td><span class="badge badge-muted">${o.deliveryType}</span></td>
+          <td>${(o.items||[]).length} buc.</td>
+        </tr>`).join('')}</tbody></table>`;
+  } catch(e) { el.innerHTML = '<p class="text-muted p-3">Eroare.</p>'; }
+}
+
+loadUsers();
+</script>
+</body>
+</html>

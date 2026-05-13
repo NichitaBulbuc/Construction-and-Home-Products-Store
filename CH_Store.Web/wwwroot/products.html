@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Produse — CH Store</title>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+<header class="navbar">
+  <a href="index.html" class="brand">
+    <span class="brand-logo">CH</span>
+    <span class="brand-name">Construction Store</span>
+  </a>
+  <nav>
+    <a href="index.html">Acasă</a>
+    <a href="products.html">Produse</a>
+    <a href="cart.html" class="cart-btn">🛒 Coș <span class="cart-badge" id="cart-count">0</span></a>
+  </nav>
+</header>
+
+<div class="container section">
+
+  <div class="page-header">
+    <h1>📦 Catalog produse</h1>
+    <p>Materiale de construcții, unelte și produse pentru casă</p>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters-bar">
+    <input type="text" class="form-control" id="search-input" placeholder="🔍 Caută produs..." oninput="filterProducts()">
+    <select class="form-control" id="cat-select" onchange="filterProducts()">
+      <option value="">Toate categoriile</option>
+    </select>
+    <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center">
+      <span class="text-muted" style="font-size:.8rem" id="count-label"></span>
+      <button class="btn btn-ghost btn-sm" onclick="resetFilters()">✕ Reset</button>
+    </div>
+  </div>
+
+  <!-- Grid -->
+  <div class="grid-4" id="products-grid">
+    <div class="loading-block" style="grid-column:1/-1"><div class="spinner"></div></div>
+  </div>
+
+</div>
+
+<!-- Product Detail Modal -->
+<div class="modal-overlay d-none" id="detail-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-name">Produs</h3>
+      <button class="modal-close" onclick="closeModal('detail-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:140px 1fr;gap:1.5rem;align-items:start">
+        <div style="background:var(--accent-bg);border-radius:8px;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:3.5rem" id="modal-icon">📦</div>
+        <div>
+          <span class="badge badge-primary" id="modal-cat"></span>
+          <div style="font-size:1.6rem;font-weight:700;color:var(--primary);margin:.5rem 0" id="modal-price"></div>
+          <p id="modal-desc" class="text-muted" style="font-size:.9rem"></p>
+          <div class="mt-2" id="modal-stock"></div>
+          <div class="mt-2 text-muted" style="font-size:.8rem" id="modal-meta"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <div style="display:flex;align-items:center;gap:.75rem;margin-right:auto">
+        <label style="font-size:.875rem;font-weight:600">Cantitate:</label>
+        <input type="number" class="form-control" id="modal-qty" value="1" min="1" style="width:70px">
+      </div>
+      <button class="btn btn-ghost" onclick="closeModal('detail-modal')">Înapoi</button>
+      <button class="btn btn-primary" id="modal-add-btn" onclick="addFromModal()">🛒 Adaugă în coș</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="js/api.js"></script>
+<script>
+const CATS = [
+  { icon:'🧱', name:'Construcții',  key:'constructii' },
+  { icon:'⚡', name:'Electrice',    key:'electrice' },
+  { icon:'🔧', name:'Instalații',   key:'instalatii' },
+  { icon:'🛋️', name:'Interior',     key:'interior' },
+  { icon:'🌿', name:'Exterior',     key:'exterior' },
+  { icon:'🪟', name:'Tâmplărie',    key:'tamplarie' },
+  { icon:'🔨', name:'Unelte',       key:'unelte' },
+  { icon:'💡', name:'Iluminat',     key:'iluminat' },
+];
+
+let allProducts = [];
+let currentProduct = null;
+
+async function loadProducts() {
+  const grid = document.getElementById('products-grid');
+  try {
+    allProducts = await API.products.getAll() || [];
+
+    // Populează category select
+    const cats = [...new Set(allProducts.map(p => p.category).filter(Boolean))].sort();
+    const sel = document.getElementById('cat-select');
+    cats.forEach(c => sel.add(new Option(c, c)));
+
+    // URL param
+    const params = new URLSearchParams(location.search);
+    if (params.get('cat')) {
+      const matchCat = cats.find(c => c.toLowerCase().includes(params.get('cat')));
+      if (matchCat) sel.value = matchCat;
+    }
+    if (params.get('id')) {
+      const p = allProducts.find(x => x.id == params.get('id'));
+      if (p) openDetail(p);
+    }
+
+    renderProducts(allProducts);
+  } catch(e) {
+    grid.innerHTML = '<p class="text-muted text-center" style="grid-column:1/-1">Eroare la încărcarea produselor. Asigurați-vă că API-ul rulează.</p>';
+  }
+}
+
+function renderProducts(list) {
+  const grid = document.getElementById('products-grid');
+  document.getElementById('count-label').textContent = `${list.length} produs${list.length !== 1 ? 'e' : ''}`;
+  if (!list.length) {
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🔍</div><h3>Niciun produs găsit</h3><p>Încearcă alt termen de căutare sau altă categorie.</p></div>';
+    return;
+  }
+  grid.innerHTML = list.map(p => {
+    const catIcon = CATS.find(c => (p.category||'').toLowerCase().includes(c.key))?.icon || '📦';
+    const inStock = p.stockQuantity > 0;
+    return `
+    <div class="card product-card" onclick="openDetail(${JSON.stringify(p).replace(/"/g,'&quot;')})">
+      <div class="product-img">${catIcon}</div>
+      <div class="product-body">
+        <div class="product-cat">${escHtml(p.category||'General')}</div>
+        <div class="product-name">${escHtml(p.name)}</div>
+        <div class="product-price">${formatPrice(p.price)}</div>
+        <div class="${inStock?'text-success':'text-danger'}" style="font-size:.78rem">
+          ${inStock ? `✅ ${p.stockQuantity} buc.` : '❌ Stoc epuizat'}
+        </div>
+      </div>
+      <div class="product-actions">
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();openDetail(${JSON.stringify(p).replace(/"/g,'&quot;')})">Detalii</button>
+        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();quickAdd(${p.id},'${escHtml(p.name)}',${p.price})"
+          ${inStock?'':'disabled'}>🛒</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterProducts() {
+  const search = document.getElementById('search-input').value.toLowerCase();
+  const cat = document.getElementById('cat-select').value;
+  const filtered = allProducts.filter(p =>
+    (!search || p.name.toLowerCase().includes(search) || (p.description||'').toLowerCase().includes(search)) &&
+    (!cat || p.category === cat)
+  );
+  renderProducts(filtered);
+}
+
+function resetFilters() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('cat-select').value = '';
+  renderProducts(allProducts);
+}
+
+function openDetail(p) {
+  if (typeof p === 'string') p = JSON.parse(p);
+  currentProduct = p;
+  const catIcon = CATS.find(c => (p.category||'').toLowerCase().includes(c.key))?.icon || '📦';
+  document.getElementById('modal-icon').textContent = catIcon;
+  document.getElementById('modal-name').textContent = p.name;
+  document.getElementById('modal-cat').textContent = p.category || 'General';
+  document.getElementById('modal-price').textContent = formatPrice(p.price);
+  document.getElementById('modal-desc').textContent = p.description || 'Descriere indisponibilă.';
+  document.getElementById('modal-stock').innerHTML = p.stockQuantity > 0
+    ? `<span class="badge badge-success">✅ În stoc: ${p.stockQuantity} buc.</span>`
+    : `<span class="badge badge-danger">❌ Stoc epuizat</span>`;
+  document.getElementById('modal-meta').innerHTML = [
+    p.weight ? `⚖️ Greutate: ${p.weight} kg` : '',
+    p.energyClass ? `⚡ Clasa energetică: ${p.energyClass}` : '',
+  ].filter(Boolean).join(' &nbsp;|&nbsp; ');
+  document.getElementById('modal-add-btn').disabled = p.stockQuantity <= 0;
+  document.getElementById('modal-qty').value = 1;
+  document.getElementById('modal-qty').max = p.stockQuantity;
+  openModal('detail-modal');
+}
+
+async function addFromModal() {
+  if (!currentProduct) return;
+  const qty = parseInt(document.getElementById('modal-qty').value) || 1;
+  try {
+    await API.cart.addItem(getUserId(), {
+      productId: currentProduct.id,
+      productName: currentProduct.name,
+      price: currentProduct.price,
+      quantity: qty
+    });
+    showToast(`"${currentProduct.name}" adăugat (x${qty})!`, 'success');
+    refreshCartBadge();
+    closeModal('detail-modal');
+  } catch(e) { showToast('Eroare la adăugarea în coș.', 'error'); }
+}
+
+async function quickAdd(productId, productName, price) {
+  try {
+    await API.cart.addItem(getUserId(), { productId, productName, price, quantity: 1 });
+    showToast(`"${productName}" adăugat în coș!`, 'success');
+    refreshCartBadge();
+  } catch(e) { showToast('Eroare la adăugarea în coș.', 'error'); }
+}
+
+loadProducts();
+</script>
+</body>
+</html>

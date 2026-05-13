@@ -201,6 +201,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseDefaultFiles();   // index.html ca document implicit la /
+app.UseStaticFiles();    // serveste wwwroot/
 app.UseAuthorization();
 app.MapControllers();
 app.Run();

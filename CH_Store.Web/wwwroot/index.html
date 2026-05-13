@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CH Store — Construction & Home</title>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+<!-- ═══ NAVBAR ═══ -->
+<header class="navbar">
+  <a href="index.html" class="brand">
+    <span class="brand-logo">CH</span>
+    <span class="brand-name">Construction Store</span>
+  </a>
+  <nav>
+    <a href="index.html">Acasă</a>
+    <a href="products.html">Produse</a>
+    <a href="cart.html" class="cart-btn">
+      🛒 Coș <span class="cart-badge" id="cart-count">0</span>
+    </a>
+  </nav>
+</header>
+
+<!-- ═══ HERO ═══ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-label">🏗️ Construcții & Amenajări Interioare</div>
+    <h1>Construiește mai bine,<br>trăiește mai confortabil</h1>
+    <p>Materiale de construcții premium, unelte profesionale și produse pentru casă — livrare rapidă în Moldova.</p>
+    <div class="hero-actions">
+      <a href="products.html" class="btn btn-primary btn-lg">🔍 Explorează produse</a>
+      <a href="products.html" class="btn btn-outline btn-lg" style="color:#fff;border-color:rgba(255,255,255,.35)">📦 Oferte speciale</a>
+    </div>
+    <div class="hero-badge">
+      <span>⚡</span>
+      <span>Livrare express disponibilă · Garanție 2 ani · Suport tehnic inclus</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ CATEGORIES ═══ -->
+<section class="section" style="background:var(--white)">
+  <div class="container">
+    <div class="section-title text-center">
+      <h2>Categorii principale</h2>
+      <p>Găsești tot ce ai nevoie pentru construcție și amenajare</p>
+      <div class="title-line" style="margin:0 auto"></div>
+    </div>
+    <div class="grid-4 mt-3" id="categories-grid">
+      <!-- generated -->
+    </div>
+  </div>
+</section>
+
+<!-- ═══ FEATURED PRODUCTS ═══ -->
+<section class="section">
+  <div class="container">
+    <div class="flex-between mb-3">
+      <div class="section-title mb-0">
+        <h2>Produse populare</h2>
+        <div class="title-line"></div>
+      </div>
+      <a href="products.html" class="btn btn-outline btn-sm">Vezi toate →</a>
+    </div>
+    <div class="grid-4" id="products-grid">
+      <div class="loading-block"><div class="spinner"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ WHY US ═══ -->
+<section class="section" style="background:var(--accent-bg)">
+  <div class="container">
+    <div class="section-title text-center">
+      <h2>De ce CH Store?</h2>
+      <div class="title-line" style="margin:0 auto"></div>
+    </div>
+    <div class="grid-4 mt-3">
+      <div class="card card-body text-center">
+        <div style="font-size:2rem;margin-bottom:.75rem">🚚</div>
+        <h3>Livrare rapidă</h3>
+        <p class="text-muted mt-1" style="font-size:.875rem">Standard, Express sau aceeași zi — tu alegi.</p>
+      </div>
+      <div class="card card-body text-center">
+        <div style="font-size:2rem;margin-bottom:.75rem">🛡️</div>
+        <h3>Calitate garantată</h3>
+        <p class="text-muted mt-1" style="font-size:.875rem">Produse certificate, garanție 2 ani la toate categoriile.</p>
+      </div>
+      <div class="card card-body text-center">
+        <div style="font-size:2rem;margin-bottom:.75rem">💳</div>
+        <h3>Plată flexibilă</h3>
+        <p class="text-muted mt-1" style="font-size:.875rem">Card, ramburs, e-wallet sau transfer bancar.</p>
+      </div>
+      <div class="card card-body text-center">
+        <div style="font-size:2rem;margin-bottom:.75rem">🔧</div>
+        <h3>Instalare inclusă</h3>
+        <p class="text-muted mt-1" style="font-size:.875rem">Echipă tehnică disponibilă la cerere.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ FOOTER ═══ -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <div class="brand-logo" style="margin-bottom:.75rem">CH</div>
+        <p>Magazinul tău de construcții și amenajări din Moldova. Calitate, viteză și prețuri corecte.</p>
+      </div>
+      <div>
+        <h4>Navigare</h4>
+        <div style="display:flex;flex-direction:column;gap:.4rem">
+          <a href="index.html">Acasă</a>
+          <a href="products.html">Produse</a>
+          <a href="cart.html">Coș</a>
+          <a href="checkout.html">Comandă</a>
+        </div>
+      </div>
+      <div>
+        <h4>Contact</h4>
+        <p>📞 +373 22 000 000</p>
+        <p class="mt-1">✉️ contact@chstore.md</p>
+        <p class="mt-1">📍 Chișinău, Moldova</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 CH Store — Construction & Home</span>
+      <span>Design: Industrial Warm 🧱</span>
+    </div>
+  </div>
+</footer>
+
+<div id="toast-container"></div>
+
+<script src="js/api.js"></script>
+<script>
+const CATS = [
+  { icon:'🧱', name:'Construcții',  key:'constructii',  desc:'Ciment, cărămidă, beton' },
+  { icon:'⚡', name:'Electrice',    key:'electrice',    desc:'Cabluri, prize, tablouri' },
+  { icon:'🔧', name:'Instalații',   key:'instalatii',   desc:'Țevi, robineți, fitinguri' },
+  { icon:'🛋️', name:'Interior',     key:'interior',     desc:'Parchet, tapet, vopsea' },
+  { icon:'🌿', name:'Exterior',     key:'exterior',     desc:'Garduri, pergole, dale' },
+  { icon:'🪟', name:'Tâmplărie',    key:'tamplarie',    desc:'Uși, ferestre, profile' },
+  { icon:'🔨', name:'Unelte',       key:'unelte',       desc:'Scule profesionale' },
+  { icon:'💡', name:'Iluminat',     key:'iluminat',     desc:'LED, corpuri de iluminat' },
+];
+
+document.getElementById('categories-grid').innerHTML = CATS.map(c => `
+  <div class="cat-card" onclick="location.href='products.html?cat=${c.key}'">
+    <div class="cat-icon">${c.icon}</div>
+    <div class="cat-name">${c.name}</div>
+    <div class="cat-count text-muted mt-1" style="font-size:.78rem">${c.desc}</div>
+  </div>`).join('');
+
+async function loadFeatured() {
+  const grid = document.getElementById('products-grid');
+  try {
+    const products = await API.products.getAll();
+    if (!products || !products.length) {
+      grid.innerHTML = '<p class="text-muted text-center w-100">Niciun produs disponibil momentan.</p>';
+      return;
+    }
+    grid.innerHTML = products.slice(0,8).map(p => productCard(p)).join('');
+  } catch(e) {
+    grid.innerHTML = '<p class="text-muted text-center w-100">Eroare la încărcarea produselor.</p>';
+  }
+}
+
+function productCard(p) {
+  const inStock = p.stockQuantity > 0;
+  const catIcon = CATS.find(c => (p.category||'').toLowerCase().includes(c.key))?.icon || '📦';
+  return `
+  <div class="card product-card" onclick="location.href='products.html?id=${p.id}'">
+    <div class="product-img">${catIcon}</div>
+    <div class="product-body">
+      <div class="product-cat">${escHtml(p.category||'General')}</div>
+      <div class="product-name">${escHtml(p.name)}</div>
+      <div class="product-price">${formatPrice(p.price)}</div>
+      <div class="product-stock ${inStock?'text-success':'text-danger'}" style="font-size:.78rem">
+        ${inStock ? `✅ Stoc: ${p.stockQuantity}` : '❌ Indisponibil'}
+      </div>
+    </div>
+    <div class="product-actions">
+      <button class="btn btn-primary btn-sm w-100" onclick="event.stopPropagation();addToCart(${p.id},'${escHtml(p.name)}',${p.price})"
+        ${inStock?'':'disabled'}>
+        🛒 Adaugă
+      </button>
+    </div>
+  </div>`;
+}
+
+async function addToCart(productId, productName, price) {
+  try {
+    await API.cart.addItem(getUserId(), { productId, productName, price, quantity: 1 });
+    showToast(`"${productName}" adăugat în coș!`, 'success');
+    refreshCartBadge();
+  } catch(e) { showToast('Eroare la adăugarea în coș.', 'error'); }
+}
+
+loadFeatured();
+</script>
+</body>
+</html>

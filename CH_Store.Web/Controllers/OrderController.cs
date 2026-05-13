@@ -1,5 +1,8 @@
 using CH_Store.Application.Order.Interfaces;
+using CH_Store.Application.Order.Strategy.Delivery;
+using CH_Store.Application.Order.Strategy.Payment;
 using CH_Store.Domain.DTOs;
+using CH_Store.Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CH_Store.Web.Controllers
@@ -8,13 +11,18 @@ namespace CH_Store.Web.Controllers
      [Route("api/[controller]")]
      public class OrderController : ControllerBase
      {
-          private readonly IOrderFacade          _orderFacade;
-          private readonly IOrderTemplateService _templateService;
+          private readonly IOrderFacade             _orderFacade;
+          private readonly IOrderTemplateService    _templateService;
+          private readonly IPaymentStrategyResolver _paymentStrategyResolver;
 
-          public OrderController(IOrderFacade orderFacade, IOrderTemplateService templateService)
+          public OrderController(
+               IOrderFacade             orderFacade,
+               IOrderTemplateService    templateService,
+               IPaymentStrategyResolver paymentStrategyResolver)
           {
-               _orderFacade     = orderFacade;
-               _templateService = templateService;
+               _orderFacade             = orderFacade;
+               _templateService         = templateService;
+               _paymentStrategyResolver = paymentStrategyResolver;
           }
 
           // ──────────────────────────────────────────────────────────────
@@ -226,25 +234,63 @@ namespace CH_Store.Web.Controllers
                return Ok(events);
           }
 
+          // ──────────────────────────────────────────────────────────────
+          // GET /api/order/strategies
+          // Strategy Pattern — lista tuturor strategiilor disponibile
+          // ──────────────────────────────────────────────────────────────
+          [HttpGet("strategies")]
+          public IActionResult GetStrategies()
+          {
+               var delivery = DeliveryStrategyResolver.GetAll()
+                    .Select(kvp => new
+                    {
+                         Type             = kvp.Key.ToString(),
+                         Description      = kvp.Value.GetDescription(),
+                         EstimatedDays    = kvp.Value.GetEstimatedDays(),
+                         Cost             = kvp.Value.CalculateCost(new Domain.Models.OrderData()),
+                         CostLabel        = kvp.Value.CalculateCost(new Domain.Models.OrderData()) == 0
+                                            ? "gratuit"
+                                            : $"+{kvp.Value.CalculateCost(new Domain.Models.OrderData())} MDL"
+                    })
+                    .OrderBy(s => s.Cost)
+                    .ToList();
+
+               var payment = _paymentStrategyResolver.GetAll()
+                    .Select(s => new
+                    {
+                         Type        = s.PaymentType.ToString(),
+                         Description = s.GetDescription()
+                    })
+                    .ToList();
+
+               return Ok(new
+               {
+                    DeliveryStrategies = delivery,
+                    PaymentStrategies  = payment
+               });
+          }
+
           // ─── Helper ─────────────────────────────────────────────────
           private static OrderResponse BuildResponse(string message, Domain.Models.OrderData order, string report, int dbId)
                => new()
                {
-                    DbId            = dbId,
-                    BuilderId       = order.BuilderId,
-                    UserId          = order.UserId,
-                    Items           = order.Items,
-                    DeliveryAddress = order.DeliveryAddress,
-                    DeliveryType    = order.DeliveryType,
-                    DeliveryCost    = order.DeliveryCost,
-                    HasInstallation = order.HasInstallation,
-                    IsPriority      = order.IsPriority,
-                    Discount        = order.Discount,
-                    Notes           = order.Notes,
-                    TotalPrice      = order.TotalPrice,
-                    Status          = order.Status,
-                    CreatedAt       = order.CreatedAt,
-                    Report          = report
+                    DbId                        = dbId,
+                    BuilderId                   = order.BuilderId,
+                    UserId                      = order.UserId,
+                    Items                       = order.Items,
+                    DeliveryAddress             = order.DeliveryAddress,
+                    DeliveryType                = order.DeliveryType,
+                    DeliveryCost                = order.DeliveryCost,
+                    HasInstallation             = order.HasInstallation,
+                    IsPriority                  = order.IsPriority,
+                    Discount                    = order.Discount,
+                    Notes                       = order.Notes,
+                    TotalPrice                  = order.TotalPrice,
+                    Status                      = order.Status,
+                    CreatedAt                   = order.CreatedAt,
+                    Report                      = report,
+                    DeliveryStrategyDescription = order.DeliveryStrategyDescription,
+                    EstimatedDeliveryDays       = order.EstimatedDeliveryDays
                };
      }
 }

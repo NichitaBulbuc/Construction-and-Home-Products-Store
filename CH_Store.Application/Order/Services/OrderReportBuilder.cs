@@ -1,5 +1,8 @@
 using CH_Store.Application.Order.Interfaces;
+using CH_Store.Application.Order.Strategy.Delivery;
+using CH_Store.Application.Order.Strategy.Payment;
 using CH_Store.Domain.Enums;
+using CH_Store.Domain.Models;
 using System.Text;
 
 namespace CH_Store.Application.Order.Services
@@ -8,6 +11,13 @@ namespace CH_Store.Application.Order.Services
      /// Construieste un raport text detaliat al comenzii.
      /// Implementeaza acelasi IOrderBuilder ca OrderBuilder —
      /// Director-ul poate folosi aceeasi reteta pe ambii builderi.
+     ///
+     /// Strategy Pattern integrat:
+     ///   • SetDelivery()         → DeliveryStrategyResolver furnizeaza descrierea si costul
+     ///   • SetDeliveryStrategy() → primeste strategia direct
+     ///   • SetPaymentStrategy()  → adauga linia de metoda de plata in raport
+     ///
+     /// Codul duplicat (switch cu costuri) a fost eliminat — un singur loc de adevar: strategia.
      /// </summary>
      public class OrderReportBuilder : IOrderBuilder
      {
@@ -52,19 +62,23 @@ namespace CH_Store.Application.Order.Services
                _report.AppendLine();
           }
 
+          /// <summary>
+          /// Rezolva strategia prin DeliveryStrategyResolver si o aplica in raport.
+          /// Inlocuieste switch-ul hardcodat cu costuri.
+          /// </summary>
           public void SetDelivery(string address, DeliveryType deliveryType)
           {
-               _deliveryCost = deliveryType switch
-               {
-                    DeliveryType.Express => 100m,
-                    DeliveryType.SameDay => 250m,
-                    _                   => 0m
-               };
-
-               _report.AppendLine($"  Livrare : {deliveryType}  ({(_deliveryCost == 0 ? "gratuit" : $"+{_deliveryCost} MDL")})");
-               _report.AppendLine($"  Adresa  : {address}");
-               _report.AppendLine();
+               var strategy = DeliveryStrategyResolver.Resolve(deliveryType);
+               ApplyDeliveryStrategy(address, strategy);
           }
+
+          /// <summary>Primeste strategia direct si o aplica in raport.</summary>
+          public void SetDeliveryStrategy(string address, IDeliveryStrategy strategy)
+               => ApplyDeliveryStrategy(address, strategy);
+
+          /// <summary>Adauga linia de metoda de plata in raport.</summary>
+          public void SetPaymentStrategy(IPaymentStrategy strategy)
+               => _report.AppendLine($"  Plata   : {strategy.GetDescription()}");
 
           public void AddInstallation()
           {
@@ -124,6 +138,22 @@ namespace CH_Store.Application.Order.Services
                _report.AppendLine("  ════════════════════════════════════");
 
                return _report.ToString();
+          }
+
+          // ── Helper privat ────────────────────────────────────────────────────
+
+          private void ApplyDeliveryStrategy(string address, IDeliveryStrategy strategy)
+          {
+               _deliveryCost = strategy.CalculateCost(new OrderData());
+
+               string costLabel = _deliveryCost == 0
+                    ? "gratuit"
+                    : $"+{_deliveryCost} MDL";
+
+               _report.AppendLine($"  Livrare : {strategy.GetDescription()}");
+               _report.AppendLine($"  Termen  : ~{strategy.GetEstimatedDays()} zile lucratoare  ({costLabel})");
+               _report.AppendLine($"  Adresa  : {address}");
+               _report.AppendLine();
           }
      }
 }

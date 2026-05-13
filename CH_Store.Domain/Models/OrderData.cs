@@ -34,6 +34,16 @@ namespace CH_Store.Domain.Models
 
           public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+          // ── Strategy Pattern ─────────────────────────────────────────────────
+          /// <summary>Descrierea strategiei de livrare selectate (ex: "Livrare Express — 1-2 zile, +100 MDL").</summary>
+          public string DeliveryStrategyDescription { get; set; } = "";
+
+          /// <summary>Numarul estimat de zile pana la livrare, conform strategiei.</summary>
+          public int EstimatedDeliveryDays { get; set; }
+
+          /// <summary>Descrierea strategiei de plata utilizate (ex: "Plata cu cardul bancar").</summary>
+          public string PaymentStrategyDescription { get; set; } = "";
+
           /// <summary>Raportul text generat de OrderReportBuilder, salvat in DB.</summary>
           public string ReportSnapshot { get; set; } = "";
      }

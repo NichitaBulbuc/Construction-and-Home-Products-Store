@@ -6,6 +6,7 @@ using CH_Store.Application.Notifications.Interfaces;
 using CH_Store.Application.Notifications.Services;
 using CH_Store.Application.Order.Interfaces;
 using CH_Store.Application.Order.Observer;
+using CH_Store.Application.Order.Strategy.Payment;
 using NotificationService = CH_Store.Application.Notifications.Services.NotificationService;
 using CH_Store.Application.Order.Services;
 using OrderTemplateService = CH_Store.Application.Order.Services.OrderTemplateService;
@@ -40,7 +41,11 @@ builder.Services.AddScoped<IOrderObserver, AdminDashboardObserver>();
 // Subject: primeste lista de observatori injectata automat de DI
 builder.Services.AddScoped<IOrderEventPublisher, OrderEventPublisher>();
 
-// Facade foloseste IOrderEventPublisher (nu mai injecteaza direct INotificationService)
+// Strategy Pattern — resolver pentru strategiile de plata
+// Scoped deoarece depinde de PaymentProvider (Scoped)
+builder.Services.AddScoped<IPaymentStrategyResolver, PaymentStrategyResolver>();
+
+// Facade foloseste IPaymentStrategyResolver (nu mai cunoaste PaymentProvider direct)
 builder.Services.AddScoped<IOrderFacade, OrderFacade>();
 
 // ─── Contexte InMemory pentru modulele existente (Payment, Notification, Product) ─

@@ -1,7 +1,7 @@
 using CH_Store.Application.DbRepo;
 using CH_Store.Application.Order.Interfaces;
 using CH_Store.Application.Order.Observer;
-using CH_Store.Application.Payments.Services;
+using CH_Store.Application.Order.Strategy.Payment;
 using CH_Store.Domain.DTOs;
 using CH_Store.Domain.Entities;
 using CH_Store.Domain.Events;
@@ -12,33 +12,35 @@ namespace CH_Store.Application.Order.Services
      /// <summary>
      /// Facade Pattern — orchestreaza toate subsistemele.
      ///
-     /// Dupa integrarea Observer Pattern:
-     ///   • INotificationService este ELIMINAT din Facade
-     ///   • Notificarile sunt delegate catre CustomerNotificationObserver (via Publisher)
-     ///   • Actualizarea stocului este delegata catre StockObserver (via Publisher)
-     ///   • Audit log-ul este delegat catre AdminDashboardObserver (via Publisher)
+     /// Patternuri integrate:
+     ///   Builder       → OrderBuilder / OrderReportBuilder / OrderDirector
+     ///   Strategy      → IPaymentStrategyResolver (plata) + DeliveryStrategyResolver (livrare)
+     ///   Factory Method → PaymentProvider (apelat intern de fiecare IPaymentStrategy)
+     ///   Adapter       → StripePaymentAdapter (transparent prin StripePaymentStrategy)
+     ///   Observer      → IOrderEventPublisher (notificare, stoc, audit log)
+     ///   Persistence   → IOrderRepo (SQL Server)
      ///
-     /// Facade nu mai stie de notificari, stocuri sau logging — le publica ca eveniment
-     /// si observatorii reactioneaza independent, fiecare cu responsabilitatea sa.
+     /// Facade nu mai cunoaste PaymentProvider direct — stie doar IPaymentStrategyResolver.
+     /// Adaugarea unui nou mod de plata nu necesita modificari in Facade.
      /// </summary>
      public class OrderFacade : IOrderFacade
      {
-          private readonly IOrderRepo          _orderRepo;
-          private readonly PaymentProvider     _paymentProvider;
-          private readonly IOrderEventPublisher _eventPublisher;
+          private readonly IOrderRepo              _orderRepo;
+          private readonly IPaymentStrategyResolver _paymentStrategyResolver;
+          private readonly IOrderEventPublisher    _eventPublisher;
 
           public OrderFacade(
-               IOrderRepo           orderRepo,
-               PaymentProvider      paymentProvider,
-               IOrderEventPublisher eventPublisher)
+               IOrderRepo               orderRepo,
+               IPaymentStrategyResolver paymentStrategyResolver,
+               IOrderEventPublisher     eventPublisher)
           {
-               _orderRepo      = orderRepo;
-               _paymentProvider = paymentProvider;
-               _eventPublisher = eventPublisher;
+               _orderRepo               = orderRepo;
+               _paymentStrategyResolver = paymentStrategyResolver;
+               _eventPublisher          = eventPublisher;
           }
 
           // ════════════════════════════════════════════════════════════════════
-          // PLASARE COMENZI — Builder + Persistenta
+          // PLASARE COMENZI — Builder + Strategy (Delivery) + Persistenta
           // ════════════════════════════════════════════════════════════════════
 
           public Task<(OrderData Order, string Report, int DbId)> PlaceStandardOrderAsync(OrderRequest dto)
@@ -54,23 +56,31 @@ namespace CH_Store.Application.Order.Services
                => BuildAndSaveAsync(dto, (d, r) => d.ConstructBulkOrder(r));
 
           // ════════════════════════════════════════════════════════════════════
-          // PLASARE COMANDA CU PLATA — Builder + Payment + Observer
+          // PLASARE COMANDA CU PLATA — Builder + Strategy (Payment) + Observer
           // ════════════════════════════════════════════════════════════════════
 
           public async Task<OrderWithPaymentResponse> PlaceOrderWithPaymentAsync(OrderWithPaymentRequest dto)
           {
-               // ── Pas 1 + 2: Builder Pattern + Persistenta ───────────────────────
-               var (order, report, dbId) = await BuildAndSaveAsync(dto, (d, r) => d.ConstructFullOrder(r));
+               // ── Pas 1: Strategy Pattern — rezolva strategia de plata ───────────
+               // Facade nu stie de CardProcessor / StripeAdapter — stie doar strategia
+               var paymentStrategy = _paymentStrategyResolver.Resolve(dto.PaymentMethod);
 
-               // ── Pas 3: Payment subsystem (Factory Method + Adapter) ────────────
-               bool   paymentSuccess  = false;
-               string paymentTxId     = "";
-               string paymentMessage  = "";
+               // ── Pas 2 + 3: Builder + Strategy (Delivery) + Persistenta ─────────
+               // BuildAndSaveAsync aplica DeliveryStrategyResolver intern in OrderBuilder
+               // Strategia de plata este atasata builderului pentru raport si metadata
+               var (order, report, dbId) = await BuildAndSaveAsync(
+                    dto,
+                    (d, r) => d.ConstructFullOrder(r),
+                    paymentStrategy);
+
+               // ── Pas 4: Strategy Pattern — executa algoritmul de plata ──────────
+               bool   paymentSuccess = false;
+               string paymentTxId    = "";
+               string paymentMessage = "";
 
                try
                {
-                    var paymentService = _paymentProvider.GetService(dto.PaymentMethod);
-                    var paymentResult  = paymentService.Pay((double)order.TotalPrice, dto.PaymentMethod);
+                    var paymentResult = paymentStrategy.Execute(order.TotalPrice);
 
                     paymentSuccess = paymentResult.Success;
                     paymentTxId   = paymentResult.TransactionId;
@@ -81,29 +91,26 @@ namespace CH_Store.Application.Order.Services
                     paymentMessage = $"Eroare la procesarea platii: {ex.Message}";
                }
 
-               // ── Pas 4: Determina noul status si actualizeaza DB ────────────────
+               // ── Pas 5: Determina noul status si actualizeaza DB ────────────────
                string newStatus = paymentSuccess ? "Processing" : "PaymentFailed";
                await _orderRepo.UpdateStatusAsync(dbId, newStatus);
                order.Status = newStatus;
 
-               // ── Pas 5: Observer Pattern — publica eveniment ───────────────────
-               // CustomerNotificationObserver → trimite email/SMS
-               // StockObserver               → decrementeaza stoc (daca Processing)
-               // AdminDashboardObserver      → salveaza audit log
+               // ── Pas 6: Observer Pattern — publica eveniment ───────────────────
                await _eventPublisher.PublishAsync(new OrderStatusChangedEvent
                {
-                    OrderId            = dbId,
-                    UserId             = order.UserId,
-                    OldStatus          = "New",
-                    NewStatus          = newStatus,
-                    OrderTotal         = order.TotalPrice,
-                    Items              = order.Items.Select(i => new OrderEventItem(i.ProductId, i.ProductName, i.Quantity)).ToList(),
-                    RecipientContact   = dto.RecipientContact,
-                    RecipientName      = dto.RecipientName,
+                    OrderId             = dbId,
+                    UserId              = order.UserId,
+                    OldStatus           = "New",
+                    NewStatus           = newStatus,
+                    OrderTotal          = order.TotalPrice,
+                    Items               = order.Items.Select(i => new OrderEventItem(i.ProductId, i.ProductName, i.Quantity)).ToList(),
+                    RecipientContact    = dto.RecipientContact,
+                    RecipientName       = dto.RecipientName,
                     NotificationChannel = dto.NotificationChannel
                });
 
-               // ── Pas 6: Asamblare raspuns complet ──────────────────────────────
+               // ── Pas 7: Asamblare raspuns complet ──────────────────────────────
                return new OrderWithPaymentResponse
                {
                     DbId            = dbId,
@@ -121,6 +128,11 @@ namespace CH_Store.Application.Order.Services
                     Status          = order.Status,
                     CreatedAt       = order.CreatedAt,
                     Report          = report,
+
+                    // Strategy metadata
+                    DeliveryStrategyDescription = order.DeliveryStrategyDescription,
+                    EstimatedDeliveryDays       = order.EstimatedDeliveryDays,
+                    PaymentStrategyDescription  = paymentStrategy.GetDescription(),
 
                     PaymentSuccess       = paymentSuccess,
                     PaymentTransactionId = paymentTxId,
@@ -141,7 +153,6 @@ namespace CH_Store.Application.Order.Services
                if (string.IsNullOrWhiteSpace(request.NewStatus))
                     return Fail(orderId, "Statusul nou nu poate fi gol.");
 
-               // Incarcam comanda completa (avem nevoie de OldStatus + Items pentru eveniment)
                var order = await _orderRepo.GetByIdAsync(orderId);
                if (order == null)
                     return Fail(orderId, $"Comanda cu ID {orderId} nu a fost gasita.");
@@ -149,7 +160,6 @@ namespace CH_Store.Application.Order.Services
                string oldStatus = order.Status;
                await _orderRepo.UpdateStatusAsync(orderId, request.NewStatus);
 
-               // Publica eveniment → toti observatorii notificati automat
                await _eventPublisher.PublishAsync(BuildEvent(order, oldStatus, request.NewStatus, request));
 
                return new OrderOperationResult
@@ -213,18 +223,39 @@ namespace CH_Store.Application.Order.Services
           // METODE PRIVATE
           // ════════════════════════════════════════════════════════════════════
 
-          private async Task<(OrderData Order, string Report, int DbId)> BuildAndSaveAsync(
+          /// <summary>
+          /// Overload fara strategie de plata (plasare standard fara payment).
+          /// </summary>
+          private Task<(OrderData Order, string Report, int DbId)> BuildAndSaveAsync(
                OrderRequest dto,
                Action<OrderDirector, OrderRequest> constructStrategy)
+               => BuildAndSaveAsync(dto, constructStrategy, null);
+
+          /// <summary>
+          /// Construieste comanda cu Builder Pattern, aplica strategia de plata in builder
+          /// (pentru raport), apoi persista in DB.
+          /// </summary>
+          private async Task<(OrderData Order, string Report, int DbId)> BuildAndSaveAsync(
+               OrderRequest dto,
+               Action<OrderDirector, OrderRequest> constructStrategy,
+               IPaymentStrategy? paymentStrategy)
           {
                var orderBuilder  = new OrderBuilder();
                var orderDirector = new OrderDirector(orderBuilder);
                constructStrategy(orderDirector, dto);
+
+               if (paymentStrategy != null)
+                    orderBuilder.SetPaymentStrategy(paymentStrategy);
+
                var order = orderBuilder.GetResult();
 
                var reportBuilder  = new OrderReportBuilder();
                var reportDirector = new OrderDirector(reportBuilder);
                constructStrategy(reportDirector, dto);
+
+               if (paymentStrategy != null)
+                    reportBuilder.SetPaymentStrategy(paymentStrategy);
+
                var report = reportBuilder.GetResult();
 
                order.ReportSnapshot = report;
@@ -233,23 +264,20 @@ namespace CH_Store.Application.Order.Services
                return (order, report, dbId);
           }
 
-          /// <summary>
-          /// Construieste evenimentul Observer din entitatea DB a comenzii.
-          /// </summary>
           private static OrderStatusChangedEvent BuildEvent(
                OrderDbTable order,
                string oldStatus,
                string newStatus,
                OrderStatusRequest req) => new()
           {
-               OrderId            = order.Id,
-               UserId             = order.UserId,
-               OldStatus          = oldStatus,
-               NewStatus          = newStatus,
-               OrderTotal         = order.TotalAmount,
-               Items              = order.Items.Select(i => new OrderEventItem(i.ProductId, i.ProductName, i.Quantity)).ToList(),
-               RecipientContact   = req.RecipientContact,
-               RecipientName      = req.RecipientName ?? "",
+               OrderId             = order.Id,
+               UserId              = order.UserId,
+               OldStatus           = oldStatus,
+               NewStatus           = newStatus,
+               OrderTotal          = order.TotalAmount,
+               Items               = order.Items.Select(i => new OrderEventItem(i.ProductId, i.ProductName, i.Quantity)).ToList(),
+               RecipientContact    = req.RecipientContact,
+               RecipientName       = req.RecipientName ?? "",
                NotificationChannel = req.NotificationChannel ?? "email"
           };
 

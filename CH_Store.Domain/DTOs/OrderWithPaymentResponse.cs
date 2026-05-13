@@ -28,11 +28,16 @@ namespace CH_Store.Domain.DTOs
           public DateTime     CreatedAt       { get; set; }
           public string       Report          { get; set; } = "";
 
+          // ─── Strategy Pattern — metadata livrare ─────────────────────────────
+          public string DeliveryStrategyDescription { get; set; } = "";
+          public int    EstimatedDeliveryDays       { get; set; }
+
           // ─── Rezultat plata ───────────────────────────────────────────────────
-          public bool   PaymentSuccess       { get; set; }
-          public string PaymentTransactionId { get; set; } = "";
-          public string PaymentMessage       { get; set; } = "";
-          public string PaymentMethod        { get; set; } = "";
+          public bool   PaymentSuccess             { get; set; }
+          public string PaymentTransactionId       { get; set; } = "";
+          public string PaymentMessage             { get; set; } = "";
+          public string PaymentMethod              { get; set; } = "";
+          public string PaymentStrategyDescription { get; set; } = "";
 
           // ─── Notificare ───────────────────────────────────────────────────────
           public bool   NotificationSent    { get; set; }

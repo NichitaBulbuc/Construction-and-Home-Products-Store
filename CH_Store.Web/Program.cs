@@ -7,6 +7,8 @@ using CH_Store.Application.Notifications.Services;
 using CH_Store.Application.Cart.Command;
 using CH_Store.Application.Cart.Interfaces;
 using CH_Store.Application.Cart.Services;
+using CH_Store.Application.Order.Chain;
+using CH_Store.Application.Order.Chain.Handlers;
 using CH_Store.Application.Order.Interfaces;
 using CH_Store.Application.Order.Observer;
 using CH_Store.Application.Order.Strategy.Payment;
@@ -56,7 +58,16 @@ builder.Services.AddScoped<IOrderEventPublisher, OrderEventPublisher>();
 // Scoped deoarece depinde de PaymentProvider (Scoped)
 builder.Services.AddScoped<IPaymentStrategyResolver, PaymentStrategyResolver>();
 
-// Facade foloseste IPaymentStrategyResolver (nu mai cunoaste PaymentProvider direct)
+// ─── Chain of Responsibility ─────────────────────────────────────────────────
+// Toti handlarii sunt Scoped (au AppDbContext). Injectati ca concrete types
+// deoarece OrderApprovalChain le primeste explicit pentru a construi lantul.
+builder.Services.AddScoped<StockValidationHandler>();
+builder.Services.AddScoped<CreditLimitHandler>();
+builder.Services.AddScoped<DiscountApprovalHandler>();
+builder.Services.AddScoped<FraudDetectionHandler>();
+builder.Services.AddScoped<IOrderApprovalChain, OrderApprovalChain>();
+
+// Facade foloseste IPaymentStrategyResolver + IOrderApprovalChain
 builder.Services.AddScoped<IOrderFacade, OrderFacade>();
 
 // ─── Contexte InMemory pentru modulele existente (Payment, Notification, Product) ─

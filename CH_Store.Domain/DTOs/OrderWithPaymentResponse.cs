@@ -42,5 +42,12 @@ namespace CH_Store.Domain.DTOs
           // ─── Notificare ───────────────────────────────────────────────────────
           public bool   NotificationSent    { get; set; }
           public string NotificationChannel { get; set; } = "";
+
+          // ─── Chain of Responsibility — rezultatul validarii ───────────────────
+          /// <summary>
+          /// Rezultatul lantului de aprobare.
+          /// Null daca comanda a fost respinsa inainte de a ajunge in DB.
+          /// </summary>
+          public ApprovalResult? ApprovalResult { get; set; }
      }
 }

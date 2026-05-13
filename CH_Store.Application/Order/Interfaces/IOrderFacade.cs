@@ -1,7 +1,7 @@
 using CH_Store.Domain.DTOs;
 using CH_Store.Domain.Entities;
-using CH_Store.Domain.Models;
 using CH_Store.Domain.Events;
+using CH_Store.Domain.Models;
 
 namespace CH_Store.Application.Order.Interfaces
 {
@@ -18,7 +18,15 @@ namespace CH_Store.Application.Order.Interfaces
      /// </summary>
      public interface IOrderFacade
      {
-          // ─── Plasare comenzi (Builder + Persistenta) ─────────────────────────
+          // ─── Validare standalone (Chain of Responsibility) ───────────────────
+
+          /// <summary>
+          /// Ruleaza lantul de aprobare fara a plasa comanda.
+          /// Util pentru pre-validare UX inainte de submit.
+          /// </summary>
+          Task<ApprovalResult> ValidateOrderAsync(OrderRequest dto);
+
+          // ─── Plasare comenzi (Builder + Chain + Strategy + Persistenta) ──────
 
           /// <summary>Construieste si salveaza o comanda standard (produse + livrare Standard).</summary>
           Task<(OrderData Order, string Report, int DbId)> PlaceStandardOrderAsync(OrderRequest dto);

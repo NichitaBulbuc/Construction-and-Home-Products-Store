@@ -235,6 +235,40 @@ namespace CH_Store.Web.Controllers
           }
 
           // ──────────────────────────────────────────────────────────────
+          // POST /api/order/validate
+          // Chain of Responsibility — validare comanda fara plasare
+          // Ruleaza lantul complet: Stock → Credit → Discount → Fraud
+          // ──────────────────────────────────────────────────────────────
+          [HttpPost("validate")]
+          public async Task<IActionResult> ValidateOrder([FromBody] OrderRequest dto)
+          {
+               if (dto == null || !dto.Items.Any())
+                    return BadRequest("Comanda trebuie sa contina cel putin un produs.");
+
+               var result = await _orderFacade.ValidateOrderAsync(dto);
+
+               var statusCode = result.Status switch
+               {
+                    Domain.Enums.ApprovalStatus.Approved              => 200,
+                    Domain.Enums.ApprovalStatus.PendingManagerApproval => 202,  // Accepted, but needs review
+                    Domain.Enums.ApprovalStatus.Rejected              => 422,  // Unprocessable Entity
+                    _                                                  => 200
+               };
+
+               return StatusCode(statusCode, new
+               {
+                    Status          = result.Status.ToString(),
+                    IsApproved      = result.IsApproved,
+                    NeedsReview     = result.NeedsReview,
+                    IsRejected      = result.IsRejected,
+                    RejectionReason = result.RejectionReason,
+                    PendingReasons  = result.PendingReasons,
+                    Checks          = result.Checks,
+                    ProcessedAt     = result.ProcessedAt
+               });
+          }
+
+          // ──────────────────────────────────────────────────────────────
           // GET /api/order/strategies
           // Strategy Pattern — lista tuturor strategiilor disponibile
           // ──────────────────────────────────────────────────────────────
@@ -271,7 +305,12 @@ namespace CH_Store.Web.Controllers
           }
 
           // ─── Helper ─────────────────────────────────────────────────
-          private static OrderResponse BuildResponse(string message, Domain.Models.OrderData order, string report, int dbId)
+          private static OrderResponse BuildResponse(
+               string message,
+               Domain.Models.OrderData order,
+               string report,
+               int dbId,
+               Domain.DTOs.ApprovalResult? approval = null)
                => new()
                {
                     DbId                        = dbId,
@@ -290,7 +329,8 @@ namespace CH_Store.Web.Controllers
                     CreatedAt                   = order.CreatedAt,
                     Report                      = report,
                     DeliveryStrategyDescription = order.DeliveryStrategyDescription,
-                    EstimatedDeliveryDays       = order.EstimatedDeliveryDays
+                    EstimatedDeliveryDays       = order.EstimatedDeliveryDays,
+                    ApprovalResult              = approval
                };
      }
 }

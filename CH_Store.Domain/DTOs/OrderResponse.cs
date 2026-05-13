@@ -43,5 +43,8 @@ namespace CH_Store.Domain.DTOs
 
           /// <summary>Numarul estimat de zile lucratoare pana la livrare.</summary>
           public int EstimatedDeliveryDays { get; set; }
+
+          // ─── Chain of Responsibility — rezultatul validarii ───────────────────
+          public ApprovalResult? ApprovalResult { get; set; }
      }
 }

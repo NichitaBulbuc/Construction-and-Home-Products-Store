@@ -4,6 +4,9 @@ using CH_Store.Application.DbRepo;
 using CH_Store.Application.Notifications;
 using CH_Store.Application.Notifications.Interfaces;
 using CH_Store.Application.Notifications.Services;
+using CH_Store.Application.Cart.Command;
+using CH_Store.Application.Cart.Interfaces;
+using CH_Store.Application.Cart.Services;
 using CH_Store.Application.Order.Interfaces;
 using CH_Store.Application.Order.Observer;
 using CH_Store.Application.Order.Strategy.Payment;
@@ -30,6 +33,14 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // ─── Repository pentru comenzi (citire/scriere in AppDbContext) ─────────────
 builder.Services.AddScoped<IOrderRepo, OrderRepo>();
 builder.Services.AddScoped<IOrderTemplateService, OrderTemplateService>();
+
+// ─── Command Pattern ─────────────────────────────────────────────────────────
+// CommandInvoker: Singleton — pastreaza stivele per userId in IMemoryCache (Singleton)
+// CartService:    Scoped   — orchestreaza comenzile cosului
+// OrderCommandService: Scoped — comenzi order cu stiva de undo in-scope
+builder.Services.AddSingleton<ICommandInvoker, CommandInvoker>();
+builder.Services.AddScoped<ICartService, CartService>();
+builder.Services.AddScoped<IOrderCommandService, OrderCommandService>();
 
 // ─── Observer Pattern ────────────────────────────────────────────────────────
 // Observatori concreți inregistrati ca IOrderObserver — DI ii injecteaza

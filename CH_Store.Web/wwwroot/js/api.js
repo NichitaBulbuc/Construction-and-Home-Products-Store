@@ -12,9 +12,26 @@ const API = (() => {
       method,
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
     };
+    // Adauga Bearer token daca exista sesiune activa
+    const token = localStorage.getItem('ch_token');
+    if (token) opts.headers['Authorization'] = `Bearer ${token}`;
     if (body !== null) opts.body = JSON.stringify(body);
     const res = await fetch(BASE + path, opts);
     if (res.status === 204) return null;
+
+    // Token expirat / lipsa → logout si redirect la login
+    // Exceptie: daca suntem deja pe /login.html, nu redirectam (evita loop infinit → 414)
+    if (res.status === 401) {
+      localStorage.removeItem('ch_token');
+      localStorage.removeItem('ch_user');
+      localStorage.removeItem('ch_userId');
+      if (!location.pathname.endsWith('/login.html')) {
+        const redirect = encodeURIComponent(location.pathname + location.search);
+        location.href = '/login.html?redirect=' + redirect + '&reason=session_expired';
+      }
+      return;
+    }
+
     const data = await res.json().catch(() => null);
     if (!res.ok) throw { status: res.status, data };
     return data;
@@ -25,6 +42,13 @@ const API = (() => {
   const put    = (path, body)  => request('PUT',    path, body);
   const patch  = (path, body)  => request('PATCH',  path, body);
   const del    = (path, body)  => request('DELETE', path, body);
+
+  // ── Auth ──────────────────────────────────────────────────────
+  const auth = {
+    login:    (body)  => request('POST', '/api/auth/login',    body),
+    register: (body)  => request('POST', '/api/auth/register', body),
+    me:       ()      => request('GET',  '/api/auth/me'),
+  };
 
   // ── Products ──────────────────────────────────────────────────
   const products = {
@@ -57,7 +81,7 @@ const API = (() => {
 
   // ── Orders ────────────────────────────────────────────────────
   const orders = {
-    placeWithPayment: (body)  => post('/api/order/with-payment', body),
+    placeWithPayment: (body)  => post('/api/order/pay', body),   // endpoint: [HttpPost("pay")]
     validate:         (body)  => post('/api/order/validate', body),
     strategies:       ()      => get('/api/order/strategies'),
   };
@@ -92,7 +116,7 @@ const API = (() => {
     ordersByStatus: ()         => get('/api/admin/dashboard/orders-by-status'),
   };
 
-  return { products, adminProducts, cart, orders, adminOrders, adminUsers, dashboard };
+  return { auth, products, adminProducts, cart, orders, adminOrders, adminUsers, dashboard };
 })();
 
 /* ── Toast ──────────────────────────────────────────────────── */
@@ -118,14 +142,21 @@ function statusBadge(s) { return `<span class="badge status-${s}">${s}</span>`; 
 function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function getUserId() {
-  let id = localStorage.getItem('ch_userId');
-  if (!id) { id = '1'; localStorage.setItem('ch_userId', id); }
+  // Prioritate: userId din sesiunea JWT; fallback la ch_userId manual; fallback 1
+  try {
+    const user = JSON.parse(localStorage.getItem('ch_user') || 'null');
+    if (user?.userId) return parseInt(user.userId);
+  } catch {}
+  const id = localStorage.getItem('ch_userId') || '1';
   return parseInt(id);
 }
 function setUserId(id) { localStorage.setItem('ch_userId', String(id)); }
 
 /* ── Cart badge update ──────────────────────────────────────── */
 async function refreshCartBadge() {
+  // Nu apela API-ul daca nu exista token — CartController cere [Authorize]
+  // si o cerere fara token de pe login.html ar declansa loop-ul 401 → redirect → 414
+  if (!localStorage.getItem('ch_token')) return;
   try {
     const cart = await API.cart.get(getUserId());
     const badge = document.getElementById('cart-count');

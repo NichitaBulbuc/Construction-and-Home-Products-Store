@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Utilizatori Admin — CH Store</title>
   <link rel="stylesheet" href="../css/main.css">
+  <script src="../js/auth.js"></script>
+  <script>Auth.requireAdmin();</script>
 </head>
 <body>
 
@@ -85,10 +87,10 @@
       <div class="form-group">
         <label class="form-label">Nivel / Rol</label>
         <select class="form-control" id="e-level">
-          <option value="0">0 — Client standard</option>
-          <option value="1">1 — Client VIP</option>
-          <option value="2">2 — Manager</option>
-          <option value="3">3 — Admin</option>
+          <option value="0">None (0) — Fără acces</option>
+          <option value="100">User (100) — Client standard</option>
+          <option value="200">Moderator (200) — Acces limitat</option>
+          <option value="300">Admin (300) — Acces complet</option>
         </select>
       </div>
       <input type="hidden" id="e-id">
@@ -139,7 +141,13 @@ async function loadUsers(page = 1) {
     renderTable(result.items || []);
     renderPagination(result);
   } catch(e) {
-    el.innerHTML = '<p class="text-muted p-3">Eroare la încărcarea utilizatorilor.</p>';
+    if (!e) return; // 401 → api.js face redirect, nu mai ajunge aici
+    if (e?.status === 403) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">🔒</div><h3>Acces interzis</h3><p class="text-muted">Contul tău nu are rol de Administrator. Autentifică-te cu un cont Admin.</p><a href="/login.html" class="btn btn-primary" style="margin-top:1rem">Autentificare</a></div>';
+    } else {
+      el.innerHTML = `<p class="text-muted p-3">❌ Eroare la încărcarea utilizatorilor (HTTP ${e?.status || 'rețea'}). Verifică consola pentru detalii.</p>`;
+      console.error('[loadUsers]', e);
+    }
   }
 }
 
@@ -148,19 +156,19 @@ function renderTable(list) {
     document.getElementById('users-table').innerHTML = '<div class="empty-state"><div class="empty-icon">👥</div><h3>Niciun utilizator găsit</h3></div>';
     return;
   }
-  const rolLabels = ['Client','VIP','Manager','Admin'];
-  const rolBadges = ['badge-muted','badge-primary','badge-warning','badge-danger'];
+  // URole: None=0, User=100, Moderator=200, Admin=300
+  const rolMap = { 0:{label:'None',badge:'badge-muted'}, 100:{label:'User',badge:'badge-primary'}, 200:{label:'Moderator',badge:'badge-warning'}, 300:{label:'Admin',badge:'badge-danger'} };
   document.getElementById('users-table').innerHTML = `
     <table>
       <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Telefon</th><th>Nivel</th><th>Comenzi</th><th>Total cheltuit</th><th>Înregistrat</th><th>Acțiuni</th></tr></thead>
       <tbody>${list.map(u => {
-        const roleIdx = Math.min(u.level, 3);
+        const rol = rolMap[u.level] || {label:'?',badge:'badge-muted'};
         return `<tr>
           <td class="text-muted">#${u.id}</td>
           <td><div class="fw-600">👤 ${escHtml(u.username)}</div></td>
           <td>${escHtml(u.email)}</td>
           <td>${escHtml(u.phone||'—')}</td>
-          <td><span class="badge ${rolBadges[roleIdx]}">${rolLabels[roleIdx]}</span></td>
+          <td><span class="badge ${rol.badge}">${rol.label}</span></td>
           <td class="fw-600">${u.totalOrders}</td>
           <td class="fw-bold text-primary">${formatPrice(u.totalSpent)}</td>
           <td style="font-size:.8rem;color:var(--muted)">${fmtDate(u.registartionDateTime)}</td>

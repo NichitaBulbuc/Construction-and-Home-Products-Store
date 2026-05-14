@@ -1,6 +1,7 @@
 using CH_Store.Application.Cart.Interfaces;
 using CH_Store.Domain.DTOs;
 using CH_Store.Domain.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CH_Store.Web.Controllers
@@ -26,6 +27,7 @@ namespace CH_Store.Web.Controllers
      ///   GET    /api/cart/orders/session-history  → Istoric sesiune curenta
      /// </summary>
      [ApiController]
+     [Authorize]
      [Route("api/[controller]")]
      public class CartController : ControllerBase
      {

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Înregistrare — CH Store</title>
+  <link rel="stylesheet" href="css/main.css">
+  <script src="js/auth.js"></script>
+  <script>
+    if (Auth.isAuthenticated()) location.href = '/index.html';
+  </script>
+  <style>
+    .auth-page { min-height:100vh; display:flex; flex-direction:column; }
+    .auth-center { flex:1; display:flex; align-items:center; justify-content:center; padding:2rem 1rem; background:linear-gradient(135deg,var(--dark) 0%,#2e2218 100%); }
+    .auth-card { background:var(--white); border-radius:16px; box-shadow:0 24px 64px rgba(0,0,0,.35); width:100%; max-width:480px; overflow:hidden; }
+    .auth-header { background:linear-gradient(135deg,var(--primary),var(--primary-h)); padding:2rem; text-align:center; color:#fff; }
+    .auth-header .logo { font-size:2.5rem; font-weight:900; letter-spacing:-.02em; }
+    .auth-body { padding:2rem; }
+    .auth-footer { padding:1.25rem 2rem; background:var(--light); border-top:1px solid var(--border); text-align:center; font-size:.875rem; }
+    .input-icon { position:relative; }
+    .input-icon .form-control { padding-left:2.4rem; }
+    .input-icon .icon { position:absolute; left:.75rem; top:50%; transform:translateY(-50%); color:var(--muted); font-size:1rem; pointer-events:none; }
+    .password-toggle { position:absolute; right:.75rem; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--muted); font-size:1rem; }
+    .error-box { background:#FFF5F5; border:1px solid #FEB2B2; color:var(--danger); border-radius:var(--radius); padding:.75rem 1rem; font-size:.875rem; margin-bottom:1rem; display:none; }
+    .strength-bar { height:4px; border-radius:2px; transition:all .3s; margin-top:.35rem; }
+    .req-list { font-size:.78rem; color:var(--muted); margin-top:.3rem; display:flex; flex-wrap:wrap; gap:.25rem .75rem; }
+    .req-item.ok { color:var(--success); }
+  </style>
+</head>
+<body class="auth-page">
+
+<div class="auth-center">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="logo">CH</div>
+      <div style="font-size:.85rem;opacity:.7;margin-top:.25rem">Construction &amp; Home Store</div>
+      <h2 style="color:#fff;margin-top:.5rem">Creează-ți contul 🏗️</h2>
+    </div>
+
+    <div class="auth-body">
+      <div class="error-box" id="error-box">⚠️ <span id="error-msg"></span></div>
+
+      <form id="reg-form" onsubmit="handleRegister(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Username *</label>
+            <div class="input-icon">
+              <span class="icon">👤</span>
+              <input type="text" class="form-control" id="username"
+                placeholder="min. 3 caractere" minlength="3" maxlength="30"
+                autocomplete="username" required oninput="validateForm()">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email *</label>
+            <div class="input-icon">
+              <span class="icon">✉️</span>
+              <input type="email" class="form-control" id="email"
+                placeholder="adresa@exemplu.md" maxlength="30"
+                autocomplete="email" required oninput="validateForm()">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Parolă *</label>
+          <div class="input-icon" style="position:relative">
+            <span class="icon">🔒</span>
+            <input type="password" class="form-control" id="password"
+              placeholder="min. 6 caractere" minlength="6"
+              autocomplete="new-password" required oninput="checkStrength()">
+            <button type="button" class="password-toggle" onclick="togglePwd('password')">👁</button>
+          </div>
+          <div class="strength-bar" id="strength-bar" style="background:var(--border)"></div>
+          <div class="req-list">
+            <span class="req-item" id="req-len">● min. 6 caractere</span>
+            <span class="req-item" id="req-upper">● literă mare</span>
+            <span class="req-item" id="req-digit">● cifră</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Confirmă parola *</label>
+          <div class="input-icon" style="position:relative">
+            <span class="icon">🔒</span>
+            <input type="password" class="form-control" id="confirm"
+              placeholder="Repetă parola"
+              autocomplete="new-password" required oninput="validateForm()">
+            <button type="button" class="password-toggle" onclick="togglePwd('confirm')">👁</button>
+          </div>
+          <div id="match-msg" style="font-size:.78rem;margin-top:.25rem"></div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Telefon</label>
+            <div class="input-icon">
+              <span class="icon">📞</span>
+              <input type="text" class="form-control" id="phone" placeholder="+373 ..." maxlength="30">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Adresă</label>
+            <div class="input-icon">
+              <span class="icon">📍</span>
+              <input type="text" class="form-control" id="address" placeholder="Orașul, Strada...">
+            </div>
+          </div>
+        </div>
+
+        <div style="background:var(--accent-bg);border-radius:8px;padding:.75rem 1rem;font-size:.78rem;color:var(--muted);margin-bottom:1rem">
+          🛡️ Contul va fi creat cu rolul <strong>User</strong>. Admin-ii pot modifica rolul ulterior.
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100 btn-lg" id="submit-btn">
+          ✅ Creează cont
+        </button>
+      </form>
+    </div>
+
+    <div class="auth-footer">
+      Ai deja cont?
+      <a href="/login.html" style="font-weight:600;color:var(--primary)">Autentifică-te</a>
+      &nbsp;·&nbsp;
+      <a href="/index.html" style="color:var(--muted)">← Înapoi la site</a>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="js/api.js"></script>
+<script>
+async function handleRegister(e) {
+  e.preventDefault();
+  const pwd = document.getElementById('password').value;
+  const confirm = document.getElementById('confirm').value;
+
+  if (pwd !== confirm) {
+    showError('Parolele nu coincid.');
+    return;
+  }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Se creează contul...';
+  hideError();
+
+  try {
+    const response = await API.auth.register({
+      username: document.getElementById('username').value.trim(),
+      email:    document.getElementById('email').value.trim(),
+      password: pwd,
+      phone:    document.getElementById('phone').value.trim() || null,
+      address:  document.getElementById('address').value.trim() || null,
+    });
+
+    Auth.setSession(response);
+    showToast(`Cont creat cu succes! Bun venit, ${response.username}! 🎉`, 'success');
+
+    setTimeout(() => { location.href = '/index.html'; }, 700);
+  } catch(err) {
+    const msg = err?.data?.message || 'Eroare la înregistrare.';
+    showError(msg);
+    btn.disabled = false;
+    btn.textContent = '✅ Creează cont';
+  }
+}
+
+function checkStrength() {
+  const pwd = document.getElementById('password').value;
+  const hasLen   = pwd.length >= 6;
+  const hasUpper = /[A-Z]/.test(pwd);
+  const hasDigit = /[0-9]/.test(pwd);
+  const score    = [hasLen, hasUpper, hasDigit].filter(Boolean).length;
+
+  const bar    = document.getElementById('strength-bar');
+  const colors = ['#f87171','#fb923c','#4ade80'];
+  const widths = ['33%','66%','100%'];
+  bar.style.background = colors[score - 1] || 'var(--border)';
+  bar.style.width      = widths[score - 1] || '0%';
+
+  toggle('req-len',   hasLen);
+  toggle('req-upper', hasUpper);
+  toggle('req-digit', hasDigit);
+
+  validateForm();
+}
+
+function toggle(id, ok) {
+  const el = document.getElementById(id);
+  el.classList.toggle('ok', ok);
+}
+
+function validateForm() {
+  const pwd = document.getElementById('password').value;
+  const confirm = document.getElementById('confirm').value;
+  const matchEl = document.getElementById('match-msg');
+  if (confirm.length > 0) {
+    matchEl.textContent = pwd === confirm ? '✅ Parolele coincid' : '❌ Parolele nu coincid';
+    matchEl.style.color = pwd === confirm ? 'var(--success)' : 'var(--danger)';
+  } else {
+    matchEl.textContent = '';
+  }
+}
+
+function togglePwd(id) {
+  const input = document.getElementById(id);
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+function showError(msg) {
+  document.getElementById('error-msg').textContent = msg;
+  document.getElementById('error-box').style.display = 'block';
+}
+function hideError() {
+  document.getElementById('error-box').style.display = 'none';
+}
+</script>
+</body>
+</html>

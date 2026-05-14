@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Comenzi Admin — CH Store</title>
   <link rel="stylesheet" href="../css/main.css">
+  <script src="../js/auth.js"></script>
+  <script>Auth.requireAdmin();</script>
 </head>
 <body>
 
@@ -220,7 +222,13 @@ async function loadOrders(page = 1) {
     renderPagination(result);
     loadPendingCount();
   } catch(e) {
-    el.innerHTML = '<p class="text-muted p-3">Eroare la încărcarea comenzilor.</p>';
+    if (!e) return; // 401 → redirect de la api.js
+    if (e?.status === 403) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">🔒</div><h3>Acces interzis</h3><p class="text-muted">Token-ul tău nu are rolul Admin. <strong>Deconectează-te și autentifică-te din nou.</strong></p><a href="/login.html" class="btn btn-primary" style="margin-top:1rem">Re-autentificare</a></div>';
+    } else {
+      el.innerHTML = `<p class="text-muted p-3">❌ Eroare la încărcarea comenzilor (HTTP ${e?.status || 'rețea'}).</p>`;
+      console.error('[loadOrders]', e);
+    }
   }
 }
 

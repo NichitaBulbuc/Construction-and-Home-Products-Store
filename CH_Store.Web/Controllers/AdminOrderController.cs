@@ -1,6 +1,7 @@
 using CH_Store.Application.Admin.Interfaces;
 using CH_Store.Domain.DTOs;
 using CH_Store.Domain.DTOs.Admin;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CH_Store.Web.Controllers
@@ -16,6 +17,7 @@ namespace CH_Store.Web.Controllers
      /// PATCH /api/admin/orders/{id}/status           → fortat orice status
      /// </summary>
      [ApiController]
+     [Authorize(Roles = "Admin")]
      [Route("api/admin/orders")]
      public class AdminOrderController : ControllerBase
      {

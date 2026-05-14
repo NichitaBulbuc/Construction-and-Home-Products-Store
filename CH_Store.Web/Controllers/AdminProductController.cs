@@ -1,5 +1,6 @@
 using CH_Store.Application.Admin.Interfaces;
 using CH_Store.Domain.DTOs.Admin;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CH_Store.Web.Controllers
@@ -16,6 +17,7 @@ namespace CH_Store.Web.Controllers
      /// GET    /api/admin/products/low-stock      → alerte stoc scazut (threshold=10)
      /// </summary>
      [ApiController]
+     [Authorize(Roles = "Admin")]
      [Route("api/admin/products")]
      public class AdminProductController : ControllerBase
      {

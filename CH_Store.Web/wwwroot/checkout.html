@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Finalizează comanda — CH Store</title>
   <link rel="stylesheet" href="css/main.css">
+  <script src="js/auth.js"></script>
+  <script>Auth.requireAuth();</script>  <!-- Redirect la login daca neautentificat -->
 </head>
 <body>
 
@@ -74,22 +76,22 @@
 
           <label class="form-label">Tip livrare</label>
           <div class="delivery-options" id="delivery-opts">
-            <div class="delivery-opt selected" data-type="0" onclick="selectDelivery(this,0)">
+            <div class="delivery-opt selected" data-type="Standard" onclick="selectDelivery(this,'Standard')">
               <div class="d-name">🚚 Standard</div>
               <div class="d-cost">Gratuit</div>
               <div class="d-days">3–5 zile lucrătoare</div>
             </div>
-            <div class="delivery-opt" data-type="1" onclick="selectDelivery(this,1)">
+            <div class="delivery-opt" data-type="Express" onclick="selectDelivery(this,'Express')">
               <div class="d-name">⚡ Express</div>
               <div class="d-cost">+100 MDL</div>
               <div class="d-days">1–2 zile lucrătoare</div>
             </div>
-            <div class="delivery-opt" data-type="2" onclick="selectDelivery(this,2)">
+            <div class="delivery-opt" data-type="SameDay" onclick="selectDelivery(this,'SameDay')">
               <div class="d-name">🏃 Same Day</div>
               <div class="d-cost">+250 MDL</div>
               <div class="d-days">Aceeași zi (cmd. până la 12:00)</div>
             </div>
-            <div class="delivery-opt" data-type="3" onclick="selectDelivery(this,3)">
+            <div class="delivery-opt" data-type="Pickup" onclick="selectDelivery(this,'Pickup')">
               <div class="d-name">🏭 Ridicare</div>
               <div class="d-cost">Gratuit</div>
               <div class="d-days">Disponibil în 1 zi</div>
@@ -102,24 +104,24 @@
         <div class="card-header">💳 Metodă de plată</div>
         <div class="card-body">
           <div class="payment-options">
-            <label class="payment-opt selected" onclick="selectPayment(this,0)">
-              <input type="radio" name="payment" value="0" checked> 💳 Card bancar
+            <label class="payment-opt selected" onclick="selectPayment(this,'Card')">
+              <input type="radio" name="payment" value="Card" checked> 💳 Card bancar
               <span class="text-muted" style="font-size:.8rem;margin-left:auto">Visa / Mastercard</span>
             </label>
-            <label class="payment-opt" onclick="selectPayment(this,1)">
-              <input type="radio" name="payment" value="1"> 📱 E-Wallet
+            <label class="payment-opt" onclick="selectPayment(this,'EWallet')">
+              <input type="radio" name="payment" value="EWallet"> 📱 E-Wallet
               <span class="text-muted" style="font-size:.8rem;margin-left:auto">Apple Pay, Google Pay</span>
             </label>
-            <label class="payment-opt" onclick="selectPayment(this,2)">
-              <input type="radio" name="payment" value="2"> 🏦 Transfer bancar
+            <label class="payment-opt" onclick="selectPayment(this,'BankTransfer')">
+              <input type="radio" name="payment" value="BankTransfer"> 🏦 Transfer bancar
               <span class="text-muted" style="font-size:.8rem;margin-left:auto">Factură fiscală</span>
             </label>
-            <label class="payment-opt" onclick="selectPayment(this,3)">
-              <input type="radio" name="payment" value="3"> 💵 Ramburs la livrare
+            <label class="payment-opt" onclick="selectPayment(this,'CashOnDelivery')">
+              <input type="radio" name="payment" value="CashOnDelivery"> 💵 Ramburs la livrare
               <span class="text-muted" style="font-size:.8rem;margin-left:auto">Cash sau POS</span>
             </label>
-            <label class="payment-opt" onclick="selectPayment(this,4)">
-              <input type="radio" name="payment" value="4"> ⚡ Stripe
+            <label class="payment-opt" onclick="selectPayment(this,'Stripe')">
+              <input type="radio" name="payment" value="Stripe"> ⚡ Stripe
               <span class="text-muted" style="font-size:.8rem;margin-left:auto">Plată rapidă online</span>
             </label>
           </div>
@@ -209,9 +211,9 @@
 <script src="js/api.js"></script>
 <script>
 let cartData = null;
-let selectedDelivery = 0;
-let selectedPayment = 0;
-const DELIVERY_COSTS = [0, 100, 250, 0];
+let selectedDelivery = 'Standard'; // DeliveryType enum string: Standard | Express | SameDay | Pickup
+let selectedPayment = 'Card';      // PaymentType enum string: Card | EWallet | BankTransfer | CashOnDelivery | Stripe
+const DELIVERY_COSTS = { Standard: 0, Express: 100, SameDay: 250, Pickup: 0 };
 
 document.getElementById('user-id').value = getUserId();
 
@@ -283,7 +285,7 @@ async function placeOrder() {
       productId: i.productId,
       productName: i.productName,
       quantity: i.quantity,
-      unitPrice: i.price
+      price: i.price          // câmpul din OrderItemRequest se numește "price"
     })),
     deliveryAddress: address,
     deliveryType: selectedDelivery,
@@ -313,7 +315,7 @@ async function placeOrder() {
     document.getElementById('success-title').textContent =
       result.order?.status === 'PendingApproval' ? 'Comandă în așteptare de aprobare' : 'Comandă plasată cu succes!';
     document.getElementById('success-msg').textContent =
-      `Comanda #${result.dbOrderId || '—'} · Total: ${formatPrice(result.order?.totalPrice || 0)}`;
+      `Comanda #${result.order?.dbId || '—'} · Total: ${formatPrice(result.order?.totalPrice || 0)}`;
     document.getElementById('success-status').innerHTML =
       statusBadge(result.order?.status || 'New') +
       `<p class="text-muted mt-2" style="font-size:.85rem">${statusMap[result.order?.status] || ''}</p>`;

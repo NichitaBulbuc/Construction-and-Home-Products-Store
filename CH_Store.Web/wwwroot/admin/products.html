@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Produse Admin — CH Store</title>
   <link rel="stylesheet" href="../css/main.css">
+  <script src="../js/auth.js"></script>
+  <script>Auth.requireAdmin();</script>
 </head>
 <body>
 
@@ -152,6 +154,7 @@ let allProducts = [];
 
 async function loadProducts() {
   const el = document.getElementById('products-table');
+  el.innerHTML = '<div class="loading-block"><div class="spinner"></div></div>';
   try {
     allProducts = await API.adminProducts.getAll() || [];
     const cats = [...new Set(allProducts.map(p => p.category).filter(Boolean))].sort();
@@ -159,7 +162,32 @@ async function loadProducts() {
     sel.innerHTML = '<option value="">Toate categoriile</option>' + cats.map(c => `<option>${c}</option>`).join('');
     renderTable(allProducts);
   } catch(e) {
-    el.innerHTML = '<p class="text-muted p-3">Eroare la încărcarea produselor.</p>';
+    if (!e) return; // 401 → api.js face redirect, nu mai ajunge aici
+    console.error('[loadProducts] HTTP', e?.status, e);
+    // Diagnostic automat: verifica ce rol vede serverul pentru token-ul curent
+    let diagHtml = '';
+    try {
+      const me = await fetch('/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('ch_token')}` }
+      });
+      if (me.ok) {
+        const info = await me.json();
+        diagHtml = `<div style="margin-top:.75rem;padding:.6rem .9rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:.8rem">
+          ✅ Token valid — Serverul te vede ca: <strong>${info.username}</strong>, rol: <strong>${info.role}</strong>
+          ${info.role !== 'Admin' ? `<br>⚠️ Rolul din token NU este "Admin". Apasă <a href="/login.html">Re-autentificare</a> pentru un token nou.` : '<br>❓ Rolul e corect — verifică consola pentru eroarea exactă.'}
+        </div>`;
+      } else {
+        diagHtml = `<div style="margin-top:.75rem;padding:.6rem .9rem;background:#fef9c3;border:1px solid #fef08a;border-radius:8px;font-size:.8rem">⚠️ /api/auth/me a returnat ${me.status} — token invalid sau expirat. <a href="/login.html">Re-autentificare</a></div>`;
+      }
+    } catch { diagHtml = '<div style="margin-top:.5rem;font-size:.8rem;color:var(--muted)">Nu s-a putut contacta serverul pentru diagnostic.</div>'; }
+
+    if (e?.status === 403) {
+      el.innerHTML = `<div class="empty-state"><div class="empty-icon">🔒</div><h3>Acces interzis (403)</h3><p class="text-muted">Token-ul tău nu are rolul <strong>Admin</strong>. Deconectează-te și autentifică-te din nou după ce ai setat <code>Level=300</code> în DB.</p><a href="/login.html" class="btn btn-primary" style="margin-top:1rem">Re-autentificare</a>${diagHtml}</div>`;
+    } else if (e?.status === 500) {
+      el.innerHTML = `<div class="empty-state"><div class="empty-icon">💥</div><h3>Eroare server (500)</h3><p class="text-muted">Excepție pe backend. Verifică terminalul unde rulează <code>dotnet run</code> pentru stack trace.</p>${diagHtml}</div>`;
+    } else {
+      el.innerHTML = `<p class="text-muted p-3">❌ Eroare la încărcarea produselor (HTTP ${e?.status || 'rețea'}).${diagHtml}</p>`;
+    }
   }
 }
 

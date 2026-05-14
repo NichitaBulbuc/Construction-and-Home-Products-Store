@@ -1,4 +1,5 @@
 using CH_Store.Application.Admin.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CH_Store.Web.Controllers
@@ -12,6 +13,7 @@ namespace CH_Store.Web.Controllers
      /// GET /api/admin/dashboard/orders-by-status     → distributia comenzilor pe statusuri
      /// </summary>
      [ApiController]
+     [Authorize(Roles = "Admin")]
      [Route("api/admin/dashboard")]
      public class AdminDashboardController : ControllerBase
      {

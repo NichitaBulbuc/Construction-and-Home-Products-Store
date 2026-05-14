@@ -3,11 +3,13 @@ using CH_Store.Application.Order.Strategy.Delivery;
 using CH_Store.Application.Order.Strategy.Payment;
 using CH_Store.Domain.DTOs;
 using CH_Store.Domain.Enums;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CH_Store.Web.Controllers
 {
      [ApiController]
+     [Authorize]
      [Route("api/[controller]")]
      public class OrderController : ControllerBase
      {

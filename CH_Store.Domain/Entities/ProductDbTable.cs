@@ -17,10 +17,10 @@ namespace CH_Store.Domain.Entities
           [Required]
           [StringLength(100, MinimumLength = 2)]
           [Display(Name = "Product Name")]
-          public string Name { get; set; }
+          public string Name { get; set; } = null!;
 
           [StringLength(500)]
-          public string Description { get; set; }
+          public string Description { get; set; } = "";
 
           [Required]
           [Range(0.01, 100000.00)]
@@ -32,7 +32,7 @@ namespace CH_Store.Domain.Entities
           public int StockQuantity { get; set; }
 
           [StringLength(50)]
-          public string Category { get; set; } // "Construction" sau "Home"
+          public string Category { get; set; } = ""; // "Construction" sau "Home"
 
           // Câmpuri opționale pentru flexibilitate 
           public double? Weight { get; set; }

@@ -19,27 +19,27 @@ namespace CH_Store.Domain.Entities
           [Required]
           [Display(Name = "Username")]
           [StringLength(30, MinimumLength = 3, ErrorMessage = "Username cannot be longer than 30 characters.")]
-          public string Username { get; set; }
+          public string Username { get; set; } = null!;
 
           [Required]
           [Display(Name = "Password")]
           [StringLength(50, MinimumLength = 8, ErrorMessage = "Password cannot be shorter than 8 characters.")]
-          public string Password { get; set; }
+          public string Password { get; set; } = null!;
 
           [Required]
           [Display(Name = "Email")]
           [StringLength(30)]
-          public string Email { get; set; }
+          public string Email { get; set; } = null!;
 
           [Display(Name = "Address")]
-          public string Address { get; set; }
+          public string Address { get; set; } = "";
 
           [Display(Name = "Phone")]
-          public string Phone { get; set; }
+          public string Phone { get; set; } = "";
 
           [StringLength(30)]
           [Display(Name = "UserIP")]
-          public string UserIP { get; set; }
+          public string UserIP { get; set; } = "";
 
           [Display(Name = "Login_dt")]
           [DataType(DataType.Date)]

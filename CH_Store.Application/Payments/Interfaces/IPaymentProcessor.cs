@@ -1,13 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using CH_Store.Domain.Models;
 
 namespace CH_Store.Application.Payments.Interfaces
 {
+     /// <summary>
+     /// Product — interfata comuna pentru toti procesatorii de plata.
+     /// Fiecare implementare simuleaza metoda de plata si returneaza un rezultat cu mesaj.
+     /// </summary>
      public interface IPaymentProcessor
      {
-          void Process(double amount);
+          PaymentResult Process(double amount);
      }
 }

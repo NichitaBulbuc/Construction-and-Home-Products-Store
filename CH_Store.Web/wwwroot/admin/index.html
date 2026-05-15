@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — CH Store</title>
+  <link rel="stylesheet" href="../css/main.css">
+  <script src="../js/auth.js"></script>
+  <script>Auth.requireAdmin();</script>  <!-- Doar Admin — redirect altfel -->
+</head>
+<body>
+
+<header class="navbar">
+  <a href="../index.html" class="brand">
+    <span class="brand-logo">CH</span>
+    <span class="brand-name">Admin Panel</span>
+  </a>
+  <nav>
+    <a href="../index.html">🏠 Site</a>
+    <a href="../cart.html" class="cart-btn">🛒 Coș <span class="cart-badge" id="cart-count">0</span></a>
+  </nav>
+</header>
+
+<div class="admin-layout">
+  <!-- Sidebar -->
+  <aside class="admin-sidebar">
+    <div class="sidebar-section">Dashboard</div>
+    <a href="index.html" class="active"><span class="nav-icon">📊</span> Dashboard</a>
+    <div class="sidebar-section">Catalog</div>
+    <a href="products.html"><span class="nav-icon">📦</span> Produse</a>
+    <div class="sidebar-section">Operații</div>
+    <a href="orders.html"><span class="nav-icon">🧾</span> Comenzi</a>
+    <a href="users.html"><span class="nav-icon">👥</span> Utilizatori</a>
+  </aside>
+
+  <main class="admin-main">
+    <div class="page-header flex-between">
+      <div>
+        <h1>📊 Dashboard</h1>
+        <p id="last-updated">Se încarcă...</p>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="loadAll()">🔄 Reîncarcă</button>
+    </div>
+
+    <!-- Stat Cards -->
+    <div class="grid-4 mb-3" id="stats-grid">
+      <div class="loading-block" style="grid-column:1/-1"><div class="spinner"></div></div>
+    </div>
+
+    <!-- Revenue + Orders by Status -->
+    <div class="grid-2 mb-3">
+      <div class="card">
+        <div class="card-header flex-between">
+          <span>📈 Venituri (ultimele 7 zile)</span>
+          <select class="form-control" id="rev-days" style="width:100px;margin-bottom:0" onchange="loadRevenue()">
+            <option value="7">7 zile</option>
+            <option value="14">14 zile</option>
+            <option value="30" selected>30 zile</option>
+          </select>
+        </div>
+        <div class="card-body" id="revenue-chart">
+          <div class="loading-block"><div class="spinner"></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">🎯 Comenzi pe status</div>
+        <div class="card-body" id="status-chart">
+          <div class="loading-block"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Activity + Low Stock -->
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header flex-between">
+          <span>🕐 Activitate recentă</span>
+          <a href="orders.html" class="btn btn-ghost btn-sm">Vezi toate</a>
+        </div>
+        <div class="card-body" style="padding:0" id="activity-table">
+          <div class="loading-block"><div class="spinner"></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header flex-between">
+          <span>⚠️ Stoc scăzut</span>
+          <a href="products.html" class="btn btn-ghost btn-sm">Gestionează</a>
+        </div>
+        <div class="card-body" style="padding:0" id="stock-alerts">
+          <div class="loading-block"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast-container"></div>
+<script src="../js/api.js"></script>
+<script>
+async function loadAll() {
+  await Promise.all([loadStats(), loadRevenue(), loadStatusChart(), loadActivity(), loadStockAlerts()]);
+  document.getElementById('last-updated').textContent = 'Actualizat la ' + new Date().toLocaleTimeString('ro-RO');
+}
+
+async function loadStats() {
+  const grid = document.getElementById('stats-grid');
+  try {
+    const s = await API.dashboard.stats();
+    grid.innerHTML = [
+      { icon:'🧾', label:'Total comenzi',      value:s.totalOrders,       sub:`Azi: ${s.ordersToday}`,         accent:true },
+      { icon:'💰', label:'Venituri totale',     value:formatPrice(s.totalRevenue),  sub:`Luna: ${formatPrice(s.revenueThisMonth)}` },
+      { icon:'⏳', label:'Asteaptă aprobare',   value:s.pendingApproval,   sub:`În progres: ${s.inProgress}`,   accent:s.pendingApproval>0 },
+      { icon:'📦', label:'Produse',             value:s.totalProducts,     sub:`Stoc epuizat: ${s.outOfStockProducts}` },
+      { icon:'👥', label:'Utilizatori',         value:s.totalUsers,        sub:`Noi luna asta: ${s.newUsersThisMonth}` },
+      { icon:'✅', label:'Livrate azi',         value:s.deliveredToday,    sub:`Anulate total: ${s.cancelledTotal}` },
+      { icon:'📅', label:'Venituri azi',        value:formatPrice(s.revenueToday), sub:'24h' },
+      { icon:'🚨', label:'Stoc scăzut',         value:(s.stockAlerts||[]).filter(a=>a.severity==='LowStock').length, sub:`Epuizate: ${s.outOfStockProducts}`, accent:s.outOfStockProducts>0 },
+    ].map(c => `
+      <div class="stat-card${c.accent?' accent':''}">
+        <div class="stat-icon">${c.icon}</div>
+        <div>
+          <div class="stat-value">${c.value}</div>
+          <div class="stat-label">${c.label}</div>
+          <div style="font-size:.72rem;color:var(--muted)">${c.sub}</div>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    if (!e) return; // 401 → redirect de la api.js
+    if (e?.status === 403) {
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🔒</div><h3>Acces interzis</h3><p class="text-muted">Token-ul tău nu are rolul Admin. <strong>Deconectează-te și autentifică-te din nou.</strong></p><a href="/login.html" class="btn btn-primary" style="margin-top:1rem">Re-autentificare</a></div>';
+    } else {
+      grid.innerHTML = `<p class="text-muted" style="grid-column:1/-1">❌ Eroare la încărcarea statisticilor (HTTP ${e?.status || 'rețea'}).</p>`;
+      console.error('[loadStats]', e);
+    }
+  }
+}
+
+async function loadRevenue() {
+  const days = parseInt(document.getElementById('rev-days')?.value || 30);
+  const el = document.getElementById('revenue-chart');
+  try {
+    const data = await API.dashboard.revenue(days);
+    if (!data?.length) { el.innerHTML = '<p class="text-muted text-center">Date indisponibile.</p>'; return; }
+    const max = Math.max(...data.map(d => Number(d.revenue)), 1);
+    el.innerHTML = `
+      <div style="display:flex;align-items:flex-end;gap:3px;height:120px;margin-bottom:.5rem">
+        ${data.map(d => {
+          const h = Math.max((Number(d.revenue)/max)*100, d.revenue>0?5:2);
+          return `<div title="${d.period}: ${formatPrice(d.revenue)}" style="flex:1;background:var(--primary);border-radius:3px 3px 0 0;height:${h}%;opacity:.85;cursor:pointer;transition:.2s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85"></div>`;
+        }).join('')}
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--muted)">
+        <span>${data[0]?.period}</span>
+        <span>Total: ${formatPrice(data.reduce((a,d)=>a+Number(d.revenue),0))}</span>
+        <span>${data[data.length-1]?.period}</span>
+      </div>`;
+  } catch(e) { el.innerHTML = '<p class="text-muted">Eroare.</p>'; }
+}
+
+async function loadStatusChart() {
+  const el = document.getElementById('status-chart');
+  try {
+    const data = await API.dashboard.ordersByStatus();
+    if (!data?.length) { el.innerHTML = '<p class="text-muted text-center">Date indisponibile.</p>'; return; }
+    const total = data.reduce((a,d) => a+d.count, 0) || 1;
+    el.innerHTML = data.map(d => `
+      <div style="margin-bottom:.75rem">
+        <div style="display:flex;justify-content:space-between;margin-bottom:.25rem;font-size:.875rem">
+          <span>${statusBadge(d.status)}</span>
+          <span class="fw-600">${d.count} <span class="text-muted fw-600" style="font-size:.75rem">(${((d.count/total)*100).toFixed(0)}%)</span></span>
+        </div>
+        <div style="background:var(--border);border-radius:3px;height:6px">
+          <div style="background:var(--primary);height:100%;border-radius:3px;width:${(d.count/total*100).toFixed(0)}%;transition:.4s"></div>
+        </div>
+        <div style="font-size:.72rem;color:var(--muted);text-align:right;margin-top:.1rem">${formatPrice(d.totalValue)}</div>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = '<p class="text-muted">Eroare.</p>'; }
+}
+
+async function loadActivity() {
+  const el = document.getElementById('activity-table');
+  try {
+    const data = await API.dashboard.activity(10);
+    if (!data?.length) { el.innerHTML = '<p class="text-muted text-center p-3">Nicio activitate.</p>'; return; }
+    el.innerHTML = `<table><thead><tr><th>Comandă</th><th>Tranziție</th><th>Total</th><th>La</th></tr></thead>
+      <tbody>${data.map(a => `
+        <tr>
+          <td><a href="orders.html" class="fw-600">#${a.orderId}</a><br><span class="text-muted" style="font-size:.75rem">User #${a.userId}</span></td>
+          <td style="font-size:.8rem">${statusBadge(a.oldStatus)} → ${statusBadge(a.newStatus)}</td>
+          <td class="fw-600 text-primary">${formatPrice(a.total)}</td>
+          <td style="font-size:.78rem;color:var(--muted)">${fmtDate(a.occurredAt)}</td>
+        </tr>`).join('')}</tbody></table>`;
+  } catch(e) { el.innerHTML = '<p class="text-muted p-3">Eroare.</p>'; }
+}
+
+async function loadStockAlerts() {
+  const el = document.getElementById('stock-alerts');
+  try {
+    const data = await API.adminProducts.lowStock(10);
+    if (!data?.length) { el.innerHTML = '<p class="text-success text-center p-3">✅ Toate produsele au stoc suficient.</p>'; return; }
+    el.innerHTML = `<table><thead><tr><th>Produs</th><th>Categorie</th><th>Stoc</th><th>Severitate</th></tr></thead>
+      <tbody>${data.map(a => `
+        <tr>
+          <td class="fw-600">${escHtml(a.productName)}</td>
+          <td><span class="badge badge-muted">${escHtml(a.category||'—')}</span></td>
+          <td class="${a.stockQuantity===0?'text-danger fw-bold':'text-warning fw-600'}">${a.stockQuantity}</td>
+          <td><span class="badge ${a.severity==='OutOfStock'?'badge-danger':'badge-warning'}">${a.severity}</span></td>
+        </tr>`).join('')}</tbody></table>`;
+  } catch(e) { el.innerHTML = '<p class="text-muted p-3">Eroare.</p>'; }
+}
+
+loadAll();
+</script>
+</body>
+</html>

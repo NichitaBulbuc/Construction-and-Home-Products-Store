@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finalizează comanda — CH Store</title>
+  <link rel="stylesheet" href="css/main.css">
+  <script src="js/auth.js"></script>
+  <script>Auth.requireAuth();</script>  <!-- Redirect la login daca neautentificat -->
+</head>
+<body>
+
+<header class="navbar">
+  <a href="index.html" class="brand">
+    <span class="brand-logo">CH</span>
+    <span class="brand-name">Construction Store</span>
+  </a>
+  <nav>
+    <a href="index.html">Acasă</a>
+    <a href="products.html">Produse</a>
+    <a href="cart.html" class="cart-btn">🛒 Coș <span class="cart-badge" id="cart-count">0</span></a>
+  </nav>
+</header>
+
+<div class="container section">
+
+  <div class="page-header">
+    <h1>✅ Finalizează comanda</h1>
+    <p>Completează datele de livrare și plată</p>
+  </div>
+
+  <!-- Steps -->
+  <div style="display:flex;gap:1rem;margin-bottom:2rem;align-items:center">
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <div style="width:28px;height:28px;border-radius:50%;background:var(--muted);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700">1</div>
+      <span class="text-muted" style="font-size:.875rem"><a href="cart.html" style="color:var(--muted)">Coș</a></span>
+    </div>
+    <div style="flex:1;height:2px;background:var(--primary);border-radius:1px"></div>
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <div style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700">2</div>
+      <span style="font-size:.875rem;font-weight:600">Checkout</span>
+    </div>
+    <div style="flex:1;height:2px;background:var(--border);border-radius:1px"></div>
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <div style="width:28px;height:28px;border-radius:50%;background:var(--border);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700">3</div>
+      <span class="text-muted" style="font-size:.875rem">Confirmare</span>
+    </div>
+  </div>
+
+  <!-- Empty cart warning -->
+  <div class="d-none" id="empty-warning">
+    <div class="empty-state">
+      <div class="empty-icon">🛒</div>
+      <h3>Coșul este gol</h3>
+      <p>Adaugă produse înainte de a plasa comanda.</p>
+      <a href="products.html" class="btn btn-primary mt-3">🔍 Explorează produse</a>
+    </div>
+  </div>
+
+  <div class="checkout-grid" id="checkout-grid">
+    <!-- Left: Form -->
+    <div>
+      <div class="card mb-3">
+        <div class="card-header">📦 Date livrare</div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Adresă livrare *</label>
+              <input type="text" class="form-control" id="address" placeholder="Strada, nr., bloc, apartament" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">User ID</label>
+              <input type="number" class="form-control" id="user-id" value="1" min="1" onchange="setUserId(this.value);loadCart()">
+            </div>
+          </div>
+
+          <label class="form-label">Tip livrare</label>
+          <div class="delivery-options" id="delivery-opts">
+            <div class="delivery-opt selected" data-type="Standard" onclick="selectDelivery(this,'Standard')">
+              <div class="d-name">🚚 Standard</div>
+              <div class="d-cost">Gratuit</div>
+              <div class="d-days">3–5 zile lucrătoare</div>
+            </div>
+            <div class="delivery-opt" data-type="Express" onclick="selectDelivery(this,'Express')">
+              <div class="d-name">⚡ Express</div>
+              <div class="d-cost">+100 MDL</div>
+              <div class="d-days">1–2 zile lucrătoare</div>
+            </div>
+            <div class="delivery-opt" data-type="SameDay" onclick="selectDelivery(this,'SameDay')">
+              <div class="d-name">🏃 Same Day</div>
+              <div class="d-cost">+250 MDL</div>
+              <div class="d-days">Aceeași zi (cmd. până la 12:00)</div>
+            </div>
+            <div class="delivery-opt" data-type="Pickup" onclick="selectDelivery(this,'Pickup')">
+              <div class="d-name">🏭 Ridicare</div>
+              <div class="d-cost">Gratuit</div>
+              <div class="d-days">Disponibil în 1 zi</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header">💳 Metodă de plată</div>
+        <div class="card-body">
+          <div class="payment-options">
+            <label class="payment-opt selected" onclick="selectPayment(this,'Card')">
+              <input type="radio" name="payment" value="Card" checked> 💳 Card bancar
+              <span class="text-muted" style="font-size:.8rem;margin-left:auto">Visa / Mastercard</span>
+            </label>
+            <label class="payment-opt" onclick="selectPayment(this,'EWallet')">
+              <input type="radio" name="payment" value="EWallet"> 📱 E-Wallet
+              <span class="text-muted" style="font-size:.8rem;margin-left:auto">Apple Pay, Google Pay</span>
+            </label>
+            <label class="payment-opt" onclick="selectPayment(this,'BankTransfer')">
+              <input type="radio" name="payment" value="BankTransfer"> 🏦 Transfer bancar
+              <span class="text-muted" style="font-size:.8rem;margin-left:auto">Factură fiscală</span>
+            </label>
+            <label class="payment-opt" onclick="selectPayment(this,'CashOnDelivery')">
+              <input type="radio" name="payment" value="CashOnDelivery"> 💵 Ramburs la livrare
+              <span class="text-muted" style="font-size:.8rem;margin-left:auto">Cash sau POS</span>
+            </label>
+            <label class="payment-opt" onclick="selectPayment(this,'Stripe')">
+              <input type="radio" name="payment" value="Stripe"> ⚡ Stripe
+              <span class="text-muted" style="font-size:.8rem;margin-left:auto">Plată rapidă online</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header">🔔 Notificări & opțiuni</div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Nume complet</label>
+              <input type="text" class="form-control" id="recipient-name" placeholder="Ion Ionescu">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Contact (email / telefon)</label>
+              <input type="text" class="form-control" id="recipient-contact" placeholder="email@exemplu.md">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Canal notificare</label>
+              <select class="form-control" id="notif-channel">
+                <option value="email">✉️ Email</option>
+                <option value="sms">📱 SMS</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Note suplimentare</label>
+              <input type="text" class="form-control" id="notes" placeholder="Etaj, cod intrare...">
+            </div>
+          </div>
+          <div style="display:flex;gap:2rem;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.875rem">
+              <input type="checkbox" id="installation" style="accent-color:var(--primary)">
+              🔧 Doresc instalare (+serviciu tehnic)
+            </label>
+            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.875rem">
+              <input type="checkbox" id="priority" style="accent-color:var(--primary)">
+              ⚡ Comandă prioritară
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Summary -->
+    <div>
+      <div class="card" style="position:sticky;top:calc(var(--header-h) + 1rem)">
+        <div class="card-header">📋 Sumar comandă</div>
+        <div class="card-body" id="order-summary">
+          <div class="loading-block"><div class="spinner"></div></div>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-primary w-100 btn-lg" onclick="placeOrder()" id="place-btn">
+            ✅ Plasează comanda
+          </button>
+          <a href="cart.html" class="btn btn-ghost w-100 mt-2">← Înapoi la coș</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal-overlay d-none" id="success-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🎉 Comandă plasată!</h3>
+    </div>
+    <div class="modal-body text-center">
+      <div style="font-size:4rem;margin-bottom:1rem">✅</div>
+      <h2 id="success-title">Comanda a fost plasată</h2>
+      <p id="success-msg" class="text-muted mt-2"></p>
+      <div id="success-status" class="mt-2"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:center;gap:1rem">
+      <a href="products.html" class="btn btn-outline">🔍 Continuă cumpărăturile</a>
+      <a href="index.html" class="btn btn-primary">🏠 Acasă</a>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="js/api.js"></script>
+<script>
+let cartData = null;
+let selectedDelivery = 'Standard'; // DeliveryType enum string: Standard | Express | SameDay | Pickup
+let selectedPayment = 'Card';      // PaymentType enum string: Card | EWallet | BankTransfer | CashOnDelivery | Stripe
+const DELIVERY_COSTS = { Standard: 0, Express: 100, SameDay: 250, Pickup: 0 };
+
+document.getElementById('user-id').value = getUserId();
+
+function selectDelivery(el, type) {
+  document.querySelectorAll('.delivery-opt').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedDelivery = type;
+  updateSummary();
+}
+
+function selectPayment(el, type) {
+  document.querySelectorAll('.payment-opt').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedPayment = type;
+}
+
+async function loadCart() {
+  try {
+    cartData = await API.cart.get(getUserId());
+    const badge = document.getElementById('cart-count');
+    if (badge) badge.textContent = cartData?.lineCount || 0;
+
+    if (!cartData || cartData.isEmpty) {
+      document.getElementById('empty-warning').classList.remove('d-none');
+      document.getElementById('checkout-grid').classList.add('d-none');
+      return;
+    }
+    document.getElementById('empty-warning').classList.add('d-none');
+    document.getElementById('checkout-grid').classList.remove('d-none');
+    updateSummary();
+  } catch(e) {
+    showToast('Eroare la încărcarea coșului.', 'error');
+  }
+}
+
+function updateSummary() {
+  if (!cartData) return;
+  const deliveryCost = DELIVERY_COSTS[selectedDelivery] || 0;
+  const total = (cartData.total || 0) + deliveryCost;
+  const items = cartData.items || [];
+  document.getElementById('order-summary').innerHTML = `
+    <div style="max-height:200px;overflow-y:auto;margin-bottom:1rem">
+      ${items.map(i => `
+        <div style="display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid var(--border);font-size:.875rem">
+          <span>${escHtml(i.productName)} <span class="text-muted">x${i.quantity}</span></span>
+          <span class="fw-600">${formatPrice(i.subtotal)}</span>
+        </div>`).join('')}
+    </div>
+    <div class="total-row"><span>Produse (${cartData.itemCount} buc.)</span><span>${formatPrice(cartData.total)}</span></div>
+    <div class="total-row"><span>Livrare</span><span>${deliveryCost > 0 ? formatPrice(deliveryCost) : '<span class="text-success">Gratuit</span>'}</span></div>
+    <div class="total-row grand">
+      <span>Total</span>
+      <span class="text-primary">${formatPrice(total)}</span>
+    </div>`;
+}
+
+async function placeOrder() {
+  const address = document.getElementById('address').value.trim();
+  if (!address) { showToast('Introduceți adresa de livrare.', 'warning'); return; }
+  if (!cartData?.items?.length) { showToast('Coșul este gol.', 'warning'); return; }
+
+  const btn = document.getElementById('place-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Se procesează...';
+
+  const body = {
+    userId: getUserId(),
+    items: cartData.items.map(i => ({
+      productId: i.productId,
+      productName: i.productName,
+      quantity: i.quantity,
+      price: i.price          // câmpul din OrderItemRequest se numește "price"
+    })),
+    deliveryAddress: address,
+    deliveryType: selectedDelivery,
+    paymentMethod: selectedPayment,
+    wantsInstallation: document.getElementById('installation').checked,
+    isPriority: document.getElementById('priority').checked,
+    notes: document.getElementById('notes').value,
+    notificationChannel: document.getElementById('notif-channel').value,
+    recipientContact: document.getElementById('recipient-contact').value,
+    recipientName: document.getElementById('recipient-name').value,
+    discount: 0
+  };
+
+  try {
+    const result = await API.orders.placeWithPayment(body);
+
+    // Golește coșul din UI
+    await API.cart.clear(getUserId());
+
+    const statusMap = {
+      'New': 'Comandă nouă, se procesează',
+      'PendingApproval': '⏳ Comanda necesită aprobare admin (valoare mare / discount / risc)',
+      'Processing': '✅ Comanda a fost aprobată și se procesează',
+      'PaymentFailed': '❌ Plata a eșuat, verificați metoda de plată'
+    };
+
+    document.getElementById('success-title').textContent =
+      result.order?.status === 'PendingApproval' ? 'Comandă în așteptare de aprobare' : 'Comandă plasată cu succes!';
+    document.getElementById('success-msg').textContent =
+      `Comanda #${result.order?.dbId || '—'} · Total: ${formatPrice(result.order?.totalPrice || 0)}`;
+    document.getElementById('success-status').innerHTML =
+      statusBadge(result.order?.status || 'New') +
+      `<p class="text-muted mt-2" style="font-size:.85rem">${statusMap[result.order?.status] || ''}</p>`;
+
+    openModal('success-modal');
+  } catch(e) {
+    const msg = e?.data?.message || e?.data || 'Eroare la plasarea comenzii.';
+    showToast(typeof msg === 'string' ? msg : JSON.stringify(msg), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✅ Plasează comanda';
+  }
+}
+
+loadCart();
+</script>
+</body>
+</html>

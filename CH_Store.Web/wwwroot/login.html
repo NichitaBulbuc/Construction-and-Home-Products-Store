@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Autentificare — CH Store</title>
+  <link rel="stylesheet" href="css/main.css">
+  <script src="js/auth.js"></script>
+  <script>
+    // Daca e deja autentificat, redirect la pagina anterioara / home
+    if (Auth.isAuthenticated()) {
+      const next = new URLSearchParams(location.search).get('redirect') || '/index.html';
+      location.href = next;
+    }
+  </script>
+  <style>
+    .auth-page { min-height:100vh; display:flex; flex-direction:column; }
+    .auth-center { flex:1; display:flex; align-items:center; justify-content:center; padding:2rem 1rem; background:linear-gradient(135deg,var(--dark) 0%,#2e2218 100%); }
+    .auth-card { background:var(--white); border-radius:16px; box-shadow:0 24px 64px rgba(0,0,0,.35); width:100%; max-width:440px; overflow:hidden; }
+    .auth-header { background:linear-gradient(135deg,var(--primary),var(--primary-h)); padding:2rem; text-align:center; color:#fff; }
+    .auth-header .logo { font-size:2.5rem; font-weight:900; letter-spacing:-.02em; }
+    .auth-header h2 { margin-top:.5rem; font-size:1.1rem; font-weight:400; opacity:.9; }
+    .auth-body { padding:2rem; }
+    .auth-footer { padding:1.25rem 2rem; background:var(--light); border-top:1px solid var(--border); text-align:center; font-size:.875rem; }
+    .divider { display:flex; align-items:center; gap:.75rem; margin:1.25rem 0; color:var(--muted); font-size:.8rem; }
+    .divider::before,.divider::after { content:''; flex:1; height:1px; background:var(--border); }
+    .input-icon { position:relative; }
+    .input-icon .form-control { padding-left:2.4rem; }
+    .input-icon .icon { position:absolute; left:.75rem; top:50%; transform:translateY(-50%); color:var(--muted); font-size:1rem; pointer-events:none; }
+    .password-toggle { position:absolute; right:.75rem; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--muted); font-size:1rem; }
+    .error-box { background:#FFF5F5; border:1px solid #FEB2B2; color:var(--danger); border-radius:var(--radius); padding:.75rem 1rem; font-size:.875rem; margin-bottom:1rem; display:none; }
+  </style>
+</head>
+<body class="auth-page">
+
+<div class="auth-center">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="logo">CH</div>
+      <div style="font-size:.85rem;opacity:.7;margin-top:.25rem">Construction &amp; Home Store</div>
+      <h2>Bine ai revenit! 👋</h2>
+    </div>
+
+    <div class="auth-body">
+      <div class="error-box" id="error-box">⚠️ <span id="error-msg"></span></div>
+      <!-- Mesaj sesiune expirata (redirect de la 401 interceptor) -->
+      <div id="session-expired-box" style="display:none;background:#FFF8EE;border:1px solid #FBBE68;color:#7A4F01;border-radius:var(--radius);padding:.75rem 1rem;font-size:.875rem;margin-bottom:1rem">
+        ⏱️ Sesiunea ta a expirat. Te rugăm să te autentifici din nou.
+      </div>
+
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <div class="input-icon">
+            <span class="icon">👤</span>
+            <input type="text" class="form-control" id="username"
+              placeholder="Introdu username-ul" autocomplete="username" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Parolă</label>
+          <div class="input-icon" style="position:relative">
+            <span class="icon">🔒</span>
+            <input type="password" class="form-control" id="password"
+              placeholder="Introdu parola" autocomplete="current-password" required>
+            <button type="button" class="password-toggle" onclick="togglePwd('password')">👁</button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100 btn-lg mt-2" id="submit-btn">
+          🔑 Autentificare
+        </button>
+      </form>
+
+      <div class="divider">sau</div>
+
+      <!-- Demo accounts -->
+      <div style="background:var(--accent-bg);border-radius:8px;padding:1rem;font-size:.8rem">
+        <div class="fw-600 mb-2">🧪 Conturi demo (parola: <code>password123</code>)</div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="fillDemo('admin','password123')">⚙️ Admin</button>
+          <button class="btn btn-ghost btn-sm" onclick="fillDemo('user1','password123')">👤 User</button>
+        </div>
+        <div class="text-muted mt-2" style="font-size:.75rem">
+          Dacă nu există, înregistrează-te mai întâi → va crea contul automat cu rolul User.<br>
+          Admin-ul trebuie setat manual în DB: <code>Level = 300</code>.
+        </div>
+      </div>
+    </div>
+
+    <div class="auth-footer">
+      Nu ai cont?
+      <a href="/register.html" style="font-weight:600;color:var(--primary)">Înregistrează-te</a>
+      &nbsp;·&nbsp;
+      <a href="/index.html" style="color:var(--muted)">← Înapoi la site</a>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="js/api.js"></script>
+<script>
+async function handleLogin(e) {
+  e.preventDefault();
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Se verifică...';
+  hideError();
+
+  try {
+    const response = await API.auth.login({
+      username: document.getElementById('username').value.trim(),
+      password: document.getElementById('password').value
+    });
+
+    Auth.setSession(response);
+    showToast(`Bun venit, ${response.username}! 🎉`, 'success');
+
+    // Redirect: pagina anterioara sau home (admin → panel)
+    setTimeout(() => {
+      const redirect = new URLSearchParams(location.search).get('redirect');
+      if (redirect && redirect !== '/login.html') {
+        location.href = redirect;
+      } else if (response.role === 'Admin') {
+        location.href = '/admin/index.html';
+      } else {
+        location.href = '/index.html';
+      }
+    }, 600);
+  } catch(err) {
+    const msg = err?.data?.message || 'Username sau parolă incorectă.';
+    showError(msg);
+    btn.disabled = false;
+    btn.textContent = '🔑 Autentificare';
+  }
+}
+
+function fillDemo(username, password) {
+  document.getElementById('username').value = username;
+  document.getElementById('password').value = password;
+}
+
+function togglePwd(id) {
+  const input = document.getElementById(id);
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+function showError(msg) {
+  document.getElementById('error-msg').textContent = msg;
+  document.getElementById('error-box').style.display = 'block';
+}
+function hideError() {
+  document.getElementById('error-box').style.display = 'none';
+}
+
+// Afiseaza mesaj sesiune expirata daca a fost redirectat cu reason=session_expired
+(function() {
+  const reason = new URLSearchParams(location.search).get('reason');
+  if (reason === 'session_expired') {
+    document.getElementById('session-expired-box').style.display = 'block';
+  }
+})();
+</script>
+</body>
+</html>

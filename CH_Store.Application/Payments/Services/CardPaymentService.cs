@@ -1,18 +1,15 @@
-﻿using CH_Store.Application.Payments.Interfaces;
+using Application.DBContext;
+using CH_Store.Application.Payments.Interfaces;
 using CH_Store.Application.Payments.Processors;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CH_Store.Application.Payments.Services
 {
+     /// <summary>Concrete Creator — creeaza un CardPaymentProcessor.</summary>
      public class CardPaymentService : PaymentService
      {
+          public CardPaymentService(PaymentContext context) : base(context) { }
+
           public override IPaymentProcessor Create()
-          {
-               return new CardPaymentProcessor();
-          }
+               => new CardPaymentProcessor();
      }
 }
